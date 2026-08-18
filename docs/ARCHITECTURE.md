@@ -1,0 +1,74 @@
+# Architecture
+
+## Guiding rule: Markdown is the source of truth
+
+Every derived view — the file tree, the graph, backlinks, search results, tags — is computed by parsing the actual `.md` files on disk. Nothing that can be reliably derived from Markdown is duplicated into the database. If the database and the filesystem ever disagreed, the filesystem wins, because the database simply doesn't hold that data to disagree with.
+
+The database (SQLite by default; point `DATABASE_URL` at Postgres for production) holds only:
+
+- `vaults` — name, slug, on-disk folder mapping
+- `vault_settings` — appearance/editor/graph/daily-notes preferences, as JSON
+- `templates` — template name → path pointer (the template content itself is a `.md` file)
+- `activities` — a lightweight audit trail of create/rename/move/delete/save operations
+- `plugins` — per-vault enabled/disabled flags for the plugin registry
+
+See [`backend/app/models.py`](../backend/app/models.py).
+
+## Backend layers
+
+```
+routers/        FastAPI endpoints — thin, HTTP-shaped wrappers
+services/        all real logic lives here, framework-agnostic
+  markdown_parser.py    frontmatter / wikilinks / tags / headings — pure parsing, no I/O
+  vault_service.py      safe filesystem CRUD (read/write/rename/move/delete/tree)
+  index_service.py      in-memory cache of parsed notes per vault, incrementally refreshed
+  graph_service.py      derives nodes/edges/backlinks from the index
+  search_service.py     derives search results/tag listings from the index
+  rename_service.py     plans + applies link rewrites when a note is renamed/moved
+  watcher_service.py    watchdog-based external-edit detection, feeds index_service
+  template_service.py   {{date}}/{{time}}/{{title}} placeholder rendering
+  daily_notes_service.py
+  import_export_service.py   zip import (zip-slip guarded) / export
+  plugin_registry.py    the plugin interface + static roadmap manifest
+security.py       safe_join() — the one function every filesystem path passes through
+```
+
+### Why an IndexService per vault?
+
+Re-walking and re-parsing the whole vault on every request doesn't scale to the "1,000–10,000+ notes" requirement. Each vault gets one `IndexService` (keyed by resolved root path, see `index_service.get_index()`) holding `{path: (mtime, ParsedNote)}`. `refresh()` only re-parses files whose mtime changed; `refresh_path()` updates a single file in place without walking the tree at all. Routers call `refresh_path()` after every write so the index reflects app-driven changes immediately, and `watcher_service` calls the same method when it detects an *external* edit — so both paths converge on one incremental-update primitive.
+
+### The rename race, and why link-rewriting is a two-phase plan/apply
+
+Renaming a note asks "which other notes link to this one?" — a question the `IndexService` answers by looking up the old path as a key. But `watcher_service` is *also* watching the filesystem, and the moment the physical rename hits disk, it fires an async callback that calls `refresh_path()` for the old (now-missing) path, popping it out of the index. If link-rewriting resolved "who references this note" *after* performing the rename, it would race that background thread — sometimes losing, silently skipping the rewrite.
+
+`rename_service.py` avoids the race by splitting into `plan_link_updates()` (reads the index — synchronously, before anything touches disk) and `apply_link_updates()` (does the actual text rewriting, after the rename). Routers always call plan before rename and apply after. See the module docstring and `tests/test_rename_cascade.py` for the concrete failure this avoids.
+
+## Frontend layers
+
+```
+store/          Zustand stores — one responsibility each
+  vaultStore        known vaults, current vault, file tree
+  noteStore         per-path {content, dirty, saveStatus}, debounced autosave
+  workspaceStore     tabs, panes (split editor), navigation history
+  uiStore           sidebar/modal visibility, editor mode
+  settingsStore     theme/editor/graph/daily-notes prefs, localStorage + per-vault sync
+api/client.ts    typed fetch wrapper, one function per endpoint
+lib/             pure functions: wikilink transform, tree flatten/resolve, debounce, ...
+components/       organized by feature (Editor, FileExplorer, Graph, Search, Sidebar, ...)
+```
+
+Note content flows: `NotePane` reads/writes `noteStore`, which debounces `PUT /notes/{path}` calls and exposes a `saving | saved | error` status the UI renders directly — see [docs/DEVELOPMENT.md](DEVELOPMENT.md) for the autosave contract.
+
+### Wikilink rendering
+
+`react-markdown`'s built-in link-URL sanitizer silently strips any `href` scheme it doesn't recognize (a legitimate XSS defense) — which meant a naive `wikilink://Target` href vanished before it ever reached the DOM. The fix (`MarkdownPreview.tsx`) is a `urlTransform` that allowlists the `wikilink://` scheme specifically and defers to `defaultUrlTransform` for everything else, so real links (`http://...`) still get sanitized normally. See `lib/wikilink.ts` for the encode/decode pair and `lib/tree.ts#resolveLinkTarget` for the same shortest-path resolution algorithm as the backend's `IndexService.resolve_link`, reimplemented client-side so preview rendering doesn't round-trip to the server per link.
+
+## Request flow example: opening a note
+
+1. User clicks a file in `FileExplorer` → `workspaceStore.openNote(path)`
+2. `NotePane` mounts for that path → `noteStore.loadNote(vaultId, path)` → `GET /api/vaults/{id}/notes/{path}`
+3. Backend: `vault_service.read_note()` (safe_join-guarded) → `markdown_parser.parse_note()` → response includes `content`, `frontmatter`, `tags`, `headings`, `links`
+4. Editing calls `noteStore.updateContent()` → debounced `PUT` → backend `write_note()` + `index.refresh_path()`
+5. `RightSidebar` → `BacklinksPanel` independently calls `GET /backlinks/{path}`, which is `graph_service.backlinks_for()` scanning the same index
+
+No step here touches the database — it's pure filesystem + in-memory index end to end.

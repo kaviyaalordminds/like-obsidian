@@ -1,0 +1,169 @@
+import type {
+  BacklinksResponse,
+  GraphData,
+  Note,
+  PluginInfo,
+  SearchResult,
+  TemplateSummary,
+  TreeNode,
+  Vault,
+} from '@/types'
+
+const BASE = '/api'
+
+class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: init?.body && !(init.body instanceof FormData) ? { 'content-type': 'application/json' } : undefined,
+    ...init,
+  })
+  if (!res.ok) {
+    let detail = res.statusText
+    try {
+      const body = await res.json()
+      detail = body.detail ?? detail
+    } catch {
+      // ignore
+    }
+    throw new ApiError(res.status, detail)
+  }
+  if (res.status === 204) return undefined as T
+  const contentType = res.headers.get('content-type') ?? ''
+  if (contentType.includes('application/json')) return res.json()
+  return res.blob() as unknown as T
+}
+
+export const api = {
+  // Vaults
+  listVaults: () => request<Vault[]>('/vaults'),
+  createVault: (name: string, icon = '📓') =>
+    request<Vault>('/vaults', { method: 'POST', body: JSON.stringify({ name, icon }) }),
+  openVault: (vaultId: string) => request<TreeNode>(`/vaults/${vaultId}/open`, { method: 'POST' }),
+  getTree: (vaultId: string) => request<TreeNode>(`/vaults/${vaultId}/tree`),
+  forgetVault: (vaultId: string) => request<void>(`/vaults/${vaultId}`, { method: 'DELETE' }),
+
+  // Notes
+  getNote: (vaultId: string, path: string) =>
+    request<Note>(`/vaults/${vaultId}/notes/${encodeSegments(path)}`),
+  createNote: (vaultId: string, path: string, content = '') =>
+    request<Note>(`/vaults/${vaultId}/notes`, { method: 'POST', body: JSON.stringify({ path, content }) }),
+  saveNote: (vaultId: string, path: string, content: string) =>
+    request<Note>(`/vaults/${vaultId}/notes/${encodeSegments(path)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  deleteNote: (vaultId: string, path: string) =>
+    request<void>(`/vaults/${vaultId}/notes/${encodeSegments(path)}`, { method: 'DELETE' }),
+  renameNote: (vaultId: string, path: string, newName: string) =>
+    request<Note>(`/vaults/${vaultId}/notes/${encodeSegments(path)}/rename`, {
+      method: 'POST',
+      body: JSON.stringify({ new_name: newName }),
+    }),
+  moveNote: (vaultId: string, path: string, destination: string) =>
+    request<Note>(`/vaults/${vaultId}/notes/${encodeSegments(path)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ destination }),
+    }),
+
+  // Folders
+  createFolder: (vaultId: string, path: string) =>
+    request(`/vaults/${vaultId}/folders`, { method: 'POST', body: JSON.stringify({ path }) }),
+  deleteFolder: (vaultId: string, path: string) =>
+    request<void>(`/vaults/${vaultId}/folders/${encodeSegments(path)}`, { method: 'DELETE' }),
+  renameFolder: (vaultId: string, path: string, newName: string) =>
+    request<{ path: string }>(`/vaults/${vaultId}/folders/${encodeSegments(path)}/rename`, {
+      method: 'POST',
+      body: JSON.stringify({ new_name: newName }),
+    }),
+  moveFolder: (vaultId: string, path: string, destination: string) =>
+    request<{ path: string }>(`/vaults/${vaultId}/folders/${encodeSegments(path)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ destination }),
+    }),
+
+  // Search / tags
+  search: (vaultId: string, q: string) =>
+    request<SearchResult[]>(`/vaults/${vaultId}/search?q=${encodeURIComponent(q)}`),
+  listTags: (vaultId: string) => request<Record<string, number>>(`/vaults/${vaultId}/tags`),
+  notesForTag: (vaultId: string, tag: string) =>
+    request<{ path: string; title: string }[]>(`/vaults/${vaultId}/tags/${encodeURIComponent(tag)}/notes`),
+
+  // Graph
+  globalGraph: (
+    vaultId: string,
+    opts?: { includeUnresolved?: boolean; includeOrphans?: boolean; tags?: string[]; folder?: string },
+  ) => {
+    const params = new URLSearchParams()
+    if (opts?.includeUnresolved !== undefined) params.set('include_unresolved', String(opts.includeUnresolved))
+    if (opts?.includeOrphans !== undefined) params.set('include_orphans', String(opts.includeOrphans))
+    if (opts?.folder) params.set('folder', opts.folder)
+    opts?.tags?.forEach((t) => params.append('tag', t))
+    const qs = params.toString()
+    return request<GraphData>(`/vaults/${vaultId}/graph${qs ? `?${qs}` : ''}`)
+  },
+  localGraph: (vaultId: string, path: string, depth: number) =>
+    request<GraphData>(`/vaults/${vaultId}/graph/local/${encodeSegments(path)}?depth=${depth}`),
+  backlinks: (vaultId: string, path: string) =>
+    request<BacklinksResponse>(`/vaults/${vaultId}/backlinks/${encodeSegments(path)}`),
+
+  // Templates
+  listTemplates: (vaultId: string) => request<TemplateSummary[]>(`/vaults/${vaultId}/templates`),
+  createTemplate: (vaultId: string, name: string, path: string, content: string) =>
+    request<TemplateSummary>(`/vaults/${vaultId}/templates`, {
+      method: 'POST',
+      body: JSON.stringify({ name, path, content }),
+    }),
+  deleteTemplate: (vaultId: string, templateId: string) =>
+    request<void>(`/vaults/${vaultId}/templates/${templateId}`, { method: 'DELETE' }),
+  applyTemplate: (vaultId: string, templateId: string, title: string) =>
+    request<{ content: string }>(
+      `/vaults/${vaultId}/templates/${templateId}/apply?title=${encodeURIComponent(title)}`,
+      { method: 'POST' },
+    ),
+
+  // Daily notes
+  openDailyNote: (vaultId: string, opts?: { folder?: string; date_format?: string; template_path?: string }) =>
+    request<{ path: string; created: boolean }>(`/vaults/${vaultId}/daily-note`, {
+      method: 'POST',
+      body: JSON.stringify(opts ?? {}),
+    }),
+
+  // Settings
+  getSettings: (vaultId: string) => request<{ data: Record<string, unknown> }>(`/vaults/${vaultId}/settings`),
+  updateSettings: (vaultId: string, data: Record<string, unknown>) =>
+    request<{ data: Record<string, unknown> }>(`/vaults/${vaultId}/settings`, {
+      method: 'PUT',
+      body: JSON.stringify({ data }),
+    }),
+
+  // Plugins
+  listPlugins: (vaultId: string) => request<PluginInfo[]>(`/vaults/${vaultId}/plugins`),
+  togglePlugin: (vaultId: string, pluginId: string, enabled: boolean) =>
+    request<{ id: string; enabled: boolean }>(`/vaults/${vaultId}/plugins/${pluginId}/toggle?enabled=${enabled}`, {
+      method: 'POST',
+    }),
+
+  // Import / export
+  exportVault: (vaultId: string) => request<Blob>(`/vaults/${vaultId}/export`),
+  importVault: (vaultId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<{ imported_files: string[]; count: number }>(`/vaults/${vaultId}/import`, {
+      method: 'POST',
+      body: form,
+    })
+  },
+}
+
+function encodeSegments(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/')
+}
+
+export { ApiError }

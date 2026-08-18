@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Backend runtime data — never commit user vault content or the app DB
+backend/data/
+backend/vaults/
+*.db
+*.db-journal
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
