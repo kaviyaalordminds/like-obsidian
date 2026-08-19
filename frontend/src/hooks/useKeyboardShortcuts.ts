@@ -31,6 +31,11 @@ export function useKeyboardShortcuts() {
         ui.setMainView(ui.mainView === 'graph' ? 'editor' : 'graph')
         return
       }
+      if (mod && e.shiftKey && e.key === 'F11') {
+        e.preventDefault()
+        useUIStore.getState().toggleFocusMode()
+        return
+      }
       if (mod && e.key === ',') {
         e.preventDefault()
         useUIStore.getState().setSettingsOpen(true)
@@ -67,6 +72,7 @@ export function useKeyboardShortcuts() {
         if (ui.commandPaletteOpen) ui.setCommandPaletteOpen(false)
         if (ui.quickSwitcherOpen) ui.setQuickSwitcherOpen(false)
         if (ui.searchPanelOpen) ui.setSearchPanelOpen(false)
+        if (ui.focusMode || ui.zenMode) ui.exitFocusModes()
       }
     }
 

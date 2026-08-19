@@ -8,14 +8,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
 from app.routers import (
+    activity,
+    canvas,
+    collections,
     daily_notes,
     folders,
     graph,
+    health as health_router,
     import_export,
     notes,
     plugins,
     search,
     settings as settings_router,
+    snapshots,
     templates,
     vaults,
 )
@@ -55,3 +60,8 @@ app.include_router(daily_notes.router)
 app.include_router(settings_router.router)
 app.include_router(import_export.router)
 app.include_router(plugins.router)
+app.include_router(health_router.router)
+app.include_router(collections.router)
+app.include_router(snapshots.router)
+app.include_router(canvas.router)
+app.include_router(activity.router)

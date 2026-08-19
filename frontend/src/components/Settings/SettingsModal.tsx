@@ -84,6 +84,36 @@ export function SettingsModal() {
                     <option value="dark">Dark</option>
                   </select>
                 </Field>
+                <div className="pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <div className="text-xs font-semibold uppercase text-[var(--color-text-faint)] mb-2">
+                    Visual Effects
+                  </div>
+                  <ToggleField
+                    label="Enable visual effects"
+                    checked={settings.effects.enabled}
+                    onChange={(v) => settings.updateEffects({ enabled: v })}
+                  />
+                  <ToggleField
+                    label="Background grid"
+                    checked={settings.effects.showGrid}
+                    onChange={(v) => settings.updateEffects({ showGrid: v })}
+                  />
+                  <ToggleField
+                    label="Ambient glow"
+                    checked={settings.effects.showGlow}
+                    onChange={(v) => settings.updateEffects({ showGlow: v })}
+                  />
+                  <ToggleField
+                    label="Graph HUD overlay"
+                    checked={settings.effects.showHud}
+                    onChange={(v) => settings.updateEffects({ showHud: v })}
+                  />
+                  <ToggleField
+                    label="Reduced motion"
+                    checked={settings.effects.reducedMotion}
+                    onChange={(v) => settings.updateEffects({ reducedMotion: v })}
+                  />
+                </div>
               </div>
             )}
 

@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * Design system, v2 ("futuristic knowledge OS"). Original visual language —
+ * no borrowed logos/art. Direction: deep graphite surfaces, thin technical
+ * borders, a controlled cyan primary + amber secondary accent, restrained
+ * radial glow and grid texture. Every glow/grid/motion token is re-declared
+ * to near-zero under [data-effects="off"] (Settings -> Visual Effects) and
+ * under prefers-reduced-motion, so the effects are always fully optional.
+ */
 :root {
   --color-bg: #f7f7f8;
   --color-bg-elevated: #ffffff;
@@ -10,45 +18,116 @@
   --color-text-faint: #9aa1ac;
   --color-accent: #4f7cff;
   --color-accent-soft: rgba(79, 124, 255, 0.12);
+  --color-accent-2: #c96a2e;
+  --color-accent-2-soft: rgba(201, 106, 46, 0.12);
   --color-danger: #e5484d;
   --color-tag-bg: rgba(79, 124, 255, 0.1);
   --color-unresolved: #b98900;
   --shadow-glow: 0 0 0 1px rgba(79, 124, 255, 0.08), 0 4px 24px rgba(79, 124, 255, 0.06);
+
+  --grid-line: rgba(79, 124, 255, 0.05);
+  --grid-size: 28px;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-blur: 10px;
+  --glow-strength: 0.35;
+  --motion-scale: 1;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 :root[data-theme="dark"],
 :root:not([data-theme="light"]) {
   @media (prefers-color-scheme: dark) {
-    --color-bg: #14161c;
-    --color-bg-elevated: #1a1d25;
-    --color-bg-inset: #101217;
-    --color-border: #262a35;
-    --color-text: #e7e9ee;
-    --color-text-muted: #9aa1ac;
-    --color-text-faint: #6b7280;
-    --color-accent: #6f93ff;
-    --color-accent-soft: rgba(111, 147, 255, 0.14);
+    --color-bg: #0a0c10;
+    --color-bg-elevated: #12151b;
+    --color-bg-inset: #080a0d;
+    --color-border: #21262f;
+    --color-text: #e7ecf2;
+    --color-text-muted: #9aa5b1;
+    --color-text-faint: #5c6672;
+    --color-accent: #34d1c9;
+    --color-accent-soft: rgba(52, 209, 201, 0.13);
+    --color-accent-2: #e08a3e;
+    --color-accent-2-soft: rgba(224, 138, 62, 0.14);
     --color-danger: #ff6b6f;
-    --color-tag-bg: rgba(111, 147, 255, 0.14);
-    --color-unresolved: #d3a52a;
-    --shadow-glow: 0 0 0 1px rgba(111, 147, 255, 0.12), 0 4px 28px rgba(111, 147, 255, 0.1);
+    --color-tag-bg: rgba(52, 209, 201, 0.13);
+    --color-unresolved: #e0a53e;
+    --shadow-glow: 0 0 0 1px rgba(52, 209, 201, 0.12), 0 4px 32px rgba(52, 209, 201, 0.08);
+
+    --grid-line: rgba(52, 209, 201, 0.055);
+    --glass-bg: rgba(18, 21, 27, 0.66);
   }
 }
 
 :root[data-theme="dark"] {
-  --color-bg: #14161c;
-  --color-bg-elevated: #1a1d25;
-  --color-bg-inset: #101217;
-  --color-border: #262a35;
-  --color-text: #e7e9ee;
-  --color-text-muted: #9aa1ac;
-  --color-text-faint: #6b7280;
-  --color-accent: #6f93ff;
-  --color-accent-soft: rgba(111, 147, 255, 0.14);
+  --color-bg: #0a0c10;
+  --color-bg-elevated: #12151b;
+  --color-bg-inset: #080a0d;
+  --color-border: #21262f;
+  --color-text: #e7ecf2;
+  --color-text-muted: #9aa5b1;
+  --color-text-faint: #5c6672;
+  --color-accent: #34d1c9;
+  --color-accent-soft: rgba(52, 209, 201, 0.13);
+  --color-accent-2: #e08a3e;
+  --color-accent-2-soft: rgba(224, 138, 62, 0.14);
   --color-danger: #ff6b6f;
-  --color-tag-bg: rgba(111, 147, 255, 0.14);
-  --color-unresolved: #d3a52a;
-  --shadow-glow: 0 0 0 1px rgba(111, 147, 255, 0.12), 0 4px 28px rgba(111, 147, 255, 0.1);
+  --color-tag-bg: rgba(52, 209, 201, 0.13);
+  --color-unresolved: #e0a53e;
+  --shadow-glow: 0 0 0 1px rgba(52, 209, 201, 0.12), 0 4px 32px rgba(52, 209, 201, 0.08);
+
+  --grid-line: rgba(52, 209, 201, 0.055);
+  --glass-bg: rgba(18, 21, 27, 0.66);
+}
+
+/* Visual Effects OFF (Settings -> Appearance): flattens glow/grid/glass to
+ * plain surfaces without changing layout or color roles. */
+:root[data-effects="off"] {
+  --grid-line: transparent;
+  --glow-strength: 0;
+  --shadow-glow: 0 0 0 1px var(--color-border);
+  --glass-blur: 0px;
+}
+
+/* prefers-reduced-motion and the explicit Reduced Motion setting both
+ * collapse to the same mechanism: scale every animation/transition to ~0. */
+:root[data-motion="reduced"] {
+  --motion-scale: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="normal"]) {
+    --motion-scale: 0;
+  }
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--color-border);
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: calc(0.55 + var(--glow-strength) * 0.2); }
+  50% { opacity: calc(0.85 + var(--glow-strength) * 0.15); }
+}
+@keyframes rotate-ring {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes scan-sweep {
+  0% { transform: translateX(-100%); opacity: 0; }
+  10% { opacity: calc(0.25 * var(--motion-scale)); }
+  90% { opacity: calc(0.25 * var(--motion-scale)); }
+  100% { transform: translateX(100%); opacity: 0; }
 }
 
 * {

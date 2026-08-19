@@ -39,7 +39,34 @@ Controls exposed: zoom/pan/drag (native to Cytoscape), search, filter by folder/
 
 ## Local graph
 
-`GET /api/vaults/{id}/graph/local/{path}?depth=N` (`build_local_graph`) — BFS outward from one note up to `depth` hops (1–5), following edges in **both directions** (a note's outgoing links and its backlinks both count as one hop), matching Obsidian's local-graph semantics. Rendered in the right sidebar's "Local graph" tab with a depth selector (1/2/3).
+`GET /api/vaults/{id}/graph/local/{path}?depth=N` (`build_local_graph`) — BFS outward from one note up to `depth` hops, following edges in **both directions** (a note's outgoing links and its backlinks both count as one hop), matching Obsidian's local-graph semantics. `depth=-1` is accepted as shorthand for "all" (mapped server-side to a large sentinel, `ALL_DEPTH`, so the BFS still terminates naturally at the graph's real diameter rather than looping). Rendered in the right sidebar's "Local graph" tab with a depth selector (1/2/3/All).
+
+## Visualization modes
+
+`GlobalGraphPage` renders through a single Cytoscape instance with a swappable stylesheet + layout, so switching modes never loses selection, filters, or pan/zoom state:
+
+| Mode | Layout | Look |
+|---|---|---|
+| Classic | `cose` (force-directed) | Plain nodes/edges, closest to a conventional graph view |
+| Neural | `cose` | Softer glow styling, thinner edges |
+| Radial | `concentric`, ranked by BFS distance from the focused/root node | Rings radiating outward by hop distance |
+| Cinematic | `cose` | Dark styling with a rotating-ring SVG overlay tracking the selected node's `renderedPosition()`, halo/glow on selection, connected nodes brighten and unrelated nodes dim |
+
+Node size is never hardcoded: `degreeToRadius()` (`frontend/src/lib/graph.ts`) computes each node's on-screen size from its real link + backlink count (`computeDegrees()`), written into Cytoscape as a precomputed `data(size)` field (canvas-rendered stylesheets can't evaluate function-valued mappers reliably across `react-cytoscapejs` prop diffs, so sizing is computed once in JS rather than in the Cytoscape style rules). Dimming (search miss, filtered-out, or de-emphasized-on-selection) is the same pattern: a boolean `dimmed` data field toggled from JS, matched by a `node[?dimmed]` selector.
+
+## Filtering, HUD, minimap, and other panel-level features
+
+- **Filter engine** (`graph_service`/`filter_service` + `GraphFilterPanel.tsx`) — folder, tag, date range, note type, link-count, backlink-count, orphan-only, pinned-only, unresolved-only, daily-notes-only, attachments — all combinable with AND.
+- **HUD** (`GraphHUD.tsx`) — node/edge/cluster/orphan counts, density, average connections, and a "most connected" list, all sourced from `GET /api/vaults/{id}/graph/stats` (`graph_metrics_service.compute_stats`) — never hardcoded.
+- **Minimap** (`GraphMinimap.tsx`) — a small overview canvas tracking the main viewport's `extent()`/`boundingBox()`, click-to-pan.
+- **Clusters** — `GET /api/vaults/{id}/graph/clusters` (`compute_clusters`, folder- or connected-component-strategy).
+- **Knowledge Path** — `POST /api/vaults/{id}/graph/path` (`shortest_path`, BFS) finds the shortest chain of links between two notes and returns it as a subgraph (nodes + connecting edges only) for the UI to highlight; `404` if the two notes aren't connected.
+- **Snapshots** — `GraphSnapshot` (DB model) saves filters + zoom + selection + layout + mode as one named, restorable JSON blob per vault.
+- **Export** — PNG (Cytoscape's native `cy.png()`), JSON (raw node/edge data), and SVG (hand-built from node/edge positions, since Cytoscape has no native SVG export) — see `frontend/src/lib/graphExport.ts`.
+- **Scan Network** — a staggered reveal animation over the real current node/edge set (not a canned animation); has a reduced-motion fallback that reveals immediately.
+- **Presentation mode** — fullscreen, chrome hidden, for walking through a graph live.
+
+All animation (cinematic rings, scan reveal, selection pulses) is gated by two independent settings — `effects.enabled` (visual effects on/off) and reduced-motion — both under Settings → Visual Effects, and both also respect `prefers-reduced-motion` by default.
 
 ## Backlinks
 

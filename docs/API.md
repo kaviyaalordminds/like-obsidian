@@ -48,14 +48,66 @@ Interactive docs (Swagger UI) are available at `/docs` when the backend is runni
 | GET | `/api/vaults/{id}/search?q=...` | Ranked results with snippets; `q` starting with `#` searches tags |
 | GET | `/api/vaults/{id}/tags` | `{tag: count}` |
 | GET | `/api/vaults/{id}/tags/{tag}/notes` | Notes carrying a tag (nested tags included) |
+| GET | `/api/vaults/{id}/tags/{tag}/related` | Co-occurring tags, ranked by shared-note count |
+| POST | `/api/vaults/{id}/tags/{tag}/rename` | `{new_tag}` → rewrites every inline `#tag` and frontmatter occurrence |
+| POST | `/api/vaults/{id}/tags/merge` | `{source, target}` → rewrites `source` occurrences to `target` |
+| DELETE | `/api/vaults/{id}/tags/{tag}` | Removes the tag from every note that carries it |
 
 ## Graph
 
 | Method | Path | |
 |---|---|---|
 | GET | `/api/vaults/{id}/graph` | Global graph. Query: `include_unresolved`, `include_orphans`, `tag` (repeatable), `folder` |
-| GET | `/api/vaults/{id}/graph/local/{path}?depth=N` | BFS local graph, depth 1–5 |
+| GET | `/api/vaults/{id}/graph/local/{path}?depth=N` | BFS local graph; `depth` is 1+, or `-1` for "all" |
 | GET | `/api/vaults/{id}/backlinks/{path}` | `{backlinks: [...], unlinked_mentions: [...]}` |
+| GET | `/api/vaults/{id}/graph/stats` | Live node/edge/cluster/orphan counts, density, most-connected notes |
+| GET | `/api/vaults/{id}/graph/clusters` | Computed clusters (`folder` or `connected`-component strategy) |
+| POST | `/api/vaults/{id}/graph/path` | `{source, target}` → shortest-path subgraph (nodes + connecting edges); `404` if no path exists |
+
+## Knowledge health
+
+| Method | Path | |
+|---|---|---|
+| GET | `/api/vaults/{id}/health` | Full report: orphan/broken-link/duplicate/empty/large/stale/no-metadata counts + recommendations |
+| GET | `/api/vaults/{id}/orphans` | Notes with zero incoming or outgoing links |
+| GET | `/api/vaults/{id}/broken-links` | Unresolved `[[wikilink]]` targets, with every referencing note |
+| GET | `/api/vaults/{id}/duplicates` | Candidate duplicate-title pairs, with a similarity score |
+
+## Collections
+
+A collection is a saved `NoteFilter` — re-evaluated against the live index every time it's opened, never a cached result set.
+
+| Method | Path | |
+|---|---|---|
+| GET | `/api/vaults/{id}/collections` | List saved collections |
+| POST | `/api/vaults/{id}/collections` | `{name, filter}` → save a `NoteFilter` as a named collection |
+| DELETE | `/api/vaults/{id}/collections/{collection_id}` | Delete |
+| GET | `/api/vaults/{id}/collections/{collection_id}/notes` | Evaluate a saved collection's filter now, return matching notes |
+| POST | `/api/vaults/{id}/collections/preview` | `{filter}` → evaluate a not-yet-saved filter, for a live match count while building the query |
+
+## Graph snapshots
+
+| Method | Path | |
+|---|---|---|
+| GET | `/api/vaults/{id}/graph-snapshots` | List saved graph snapshots |
+| POST | `/api/vaults/{id}/graph-snapshots` | `{name, state}` → save filters/zoom/selection/layout/mode as one blob |
+| DELETE | `/api/vaults/{id}/graph-snapshots/{snapshot_id}` | Delete |
+
+## Canvas
+
+| Method | Path | |
+|---|---|---|
+| GET | `/api/vaults/{id}/canvas` | List `.canvas` files in the vault |
+| POST | `/api/vaults/{id}/canvas` | `{path, name}` → create, seeded with a title text node |
+| GET | `/api/vaults/{id}/canvas/{path}` | Read one canvas document (`{nodes, edges}`) |
+| PUT | `/api/vaults/{id}/canvas/{path}` | Write a canvas document (debounced autosave from the board UI) |
+| DELETE | `/api/vaults/{id}/canvas/{path}` | Delete |
+
+## Activity
+
+| Method | Path | |
+|---|---|---|
+| GET | `/api/vaults/{id}/activity?limit=N` | Recent create/save/delete/rename/move entries, newest first |
 
 ## Templates
 

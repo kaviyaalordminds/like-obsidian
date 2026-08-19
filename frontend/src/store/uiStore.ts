@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export type EditorMode = 'edit' | 'preview' | 'split'
 export type RightPanelTab = 'backlinks' | 'outline' | 'tags' | 'local-graph'
-export type MainView = 'editor' | 'graph'
+export type MainView = 'editor' | 'graph' | 'canvas' | 'health' | 'tags' | 'collections' | 'activity'
 
 interface UIState {
   mainView: MainView
@@ -15,6 +15,8 @@ interface UIState {
   searchPanelOpen: boolean
   settingsOpen: boolean
   vaultSwitcherOpen: boolean
+  focusMode: boolean // Section 48: hides sidebars/graph/toolbar, keeps status bar
+  zenMode: boolean // Section 49: focus mode + no HUD/status bar at all
   setMainView: (view: MainView) => void
 
   toggleLeftSidebar: () => void
@@ -27,6 +29,9 @@ interface UIState {
   setSearchPanelOpen: (open: boolean) => void
   setSettingsOpen: (open: boolean) => void
   setVaultSwitcherOpen: (open: boolean) => void
+  toggleFocusMode: () => void
+  toggleZenMode: () => void
+  exitFocusModes: () => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -40,6 +45,8 @@ export const useUIStore = create<UIState>((set) => ({
   searchPanelOpen: false,
   settingsOpen: false,
   vaultSwitcherOpen: false,
+  focusMode: false,
+  zenMode: false,
 
   setMainView: (view) => set({ mainView: view }),
   toggleLeftSidebar: () => set((s) => ({ leftSidebarOpen: !s.leftSidebarOpen })),
@@ -55,4 +62,7 @@ export const useUIStore = create<UIState>((set) => ({
   setSearchPanelOpen: (open) => set({ searchPanelOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
   setVaultSwitcherOpen: (open) => set({ vaultSwitcherOpen: open }),
+  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode, zenMode: false })),
+  toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode, focusMode: false })),
+  exitFocusModes: () => set({ focusMode: false, zenMode: false }),
 }))

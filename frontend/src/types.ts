@@ -95,3 +95,161 @@ export interface PluginInfo {
 }
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+// --- Graph metrics / clusters / path ---
+
+export interface MostConnected {
+  id: string
+  title: string
+  connections: number
+}
+
+export interface GraphStats {
+  node_count: number
+  edge_count: number
+  cluster_count: number
+  orphan_count: number
+  density: number
+  avg_connections: number
+  most_connected: MostConnected[]
+}
+
+export interface GraphCluster {
+  id: string
+  label: string
+  node_ids: string[]
+}
+
+// --- Knowledge health ---
+
+export interface HealthReport {
+  orphan_count: number
+  broken_link_count: number
+  duplicate_count: number
+  unused_tag_count: number
+  empty_note_count: number
+  large_note_count: number
+  old_note_count: number
+  no_metadata_count: number
+  recommendations: string[]
+}
+
+export interface OrphanNote {
+  path: string
+  title: string
+  folder: string
+}
+
+export interface BrokenLinkGroup {
+  target: string
+  referenced_from: { path: string; title: string }[]
+}
+
+export interface DuplicateCandidate {
+  a: { path: string; title: string }
+  b: { path: string; title: string }
+  similarity: number
+}
+
+// --- Tags ---
+
+export interface RelatedTag {
+  tag: string
+  co_occurrences: number
+}
+
+export interface TaggedNote {
+  path: string
+  title: string
+  modified_at: number
+}
+
+// --- Collections ---
+
+export interface NoteFilterCriteria {
+  folder?: string
+  tags?: string[]
+  created_after?: number
+  created_before?: number
+  modified_after?: number
+  modified_before?: number
+  min_links?: number
+  min_backlinks?: number
+  orphans_only?: boolean
+  pinned_only?: boolean
+  has_unresolved_only?: boolean
+  daily_notes_only?: boolean
+}
+
+export interface Collection {
+  id: string
+  name: string
+  filter: NoteFilterCriteria
+  created_at: string
+}
+
+export interface FilteredNote {
+  path: string
+  title: string
+  folder: string
+  tags: string[]
+  modified_at: number
+  link_count: number
+  backlink_count: number
+}
+
+// --- Graph snapshots ---
+
+export interface GraphSnapshotState {
+  mode?: string
+  filters?: NoteFilterCriteria
+  query?: string
+  zoom?: number
+  pan?: { x: number; y: number }
+  selectedNodeId?: string | null
+  pinnedNodeIds?: string[]
+  hiddenNodeIds?: string[]
+}
+
+export interface GraphSnapshot {
+  id: string
+  name: string
+  state: GraphSnapshotState
+  created_at: string
+}
+
+// --- Canvas ---
+
+export interface CanvasNode {
+  id: string
+  type: 'note' | 'text' | 'group'
+  x: number
+  y: number
+  width: number
+  height: number
+  note_path: string | null
+  text: string | null
+  color: string | null
+}
+
+export interface CanvasEdge {
+  id: string
+  from_node: string
+  to_node: string
+  label: string | null
+}
+
+export interface CanvasDocument {
+  nodes: CanvasNode[]
+  edges: CanvasEdge[]
+}
+
+// --- Activity ---
+
+export interface ActivityEntry {
+  id: string
+  note_path: string
+  action: 'create' | 'rename' | 'move' | 'delete' | 'save'
+  detail: string
+  created_at: string
+}

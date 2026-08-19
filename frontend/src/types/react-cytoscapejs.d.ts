@@ -9,6 +9,11 @@ declare module 'react-cytoscapejs' {
     layout?: LayoutOptions
     cy?: (cy: Core) => void
     className?: string
+    userZoomingEnabled?: boolean
+    userPanningEnabled?: boolean
+    boxSelectionEnabled?: boolean
+    minZoom?: number
+    maxZoom?: number
   }
 
   export default function CytoscapeComponent(props: CytoscapeComponentProps): JSX.Element

@@ -42,6 +42,12 @@ class Vault(Base):
     plugins: Mapped[list["Plugin"]] = relationship(
         back_populates="vault", cascade="all, delete-orphan"
     )
+    collections: Mapped[list["Collection"]] = relationship(
+        back_populates="vault", cascade="all, delete-orphan"
+    )
+    graph_snapshots: Mapped[list["GraphSnapshot"]] = relationship(
+        back_populates="vault", cascade="all, delete-orphan"
+    )
 
 
 class VaultSettings(Base):
@@ -95,3 +101,35 @@ class Plugin(Base):
     config: Mapped[dict] = mapped_column(JSON, default=dict)
 
     vault: Mapped[Vault] = relationship(back_populates="plugins")
+
+
+class Collection(Base):
+    """A saved query/filter (Section 37) — dynamically re-evaluated against
+    the live index on every read, never a stored list of note paths."""
+
+    __tablename__ = "collections"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vault_id: Mapped[str] = mapped_column(ForeignKey("vaults.id"))
+    name: Mapped[str] = mapped_column(String(255))
+    filter: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    vault: Mapped[Vault] = relationship(back_populates="collections")
+
+
+class GraphSnapshot(Base):
+    """A saved graph exploration view (Section 20): filters, zoom, selection,
+    layout and visualization mode. Reopening one re-runs the same query
+    against the live graph rather than replaying stored positions verbatim,
+    so it never goes stale relative to the vault."""
+
+    __tablename__ = "graph_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vault_id: Mapped[str] = mapped_column(ForeignKey("vaults.id"))
+    name: Mapped[str] = mapped_column(String(255))
+    state: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    vault: Mapped[Vault] = relationship(back_populates="graph_snapshots")

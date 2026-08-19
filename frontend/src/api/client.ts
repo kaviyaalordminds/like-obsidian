@@ -1,9 +1,23 @@
 import type {
+  ActivityEntry,
   BacklinksResponse,
+  BrokenLinkGroup,
+  CanvasDocument,
+  Collection,
+  DuplicateCandidate,
+  FilteredNote,
+  GraphCluster,
   GraphData,
+  GraphSnapshot,
+  GraphStats,
+  HealthReport,
   Note,
+  NoteFilterCriteria,
+  OrphanNote,
   PluginInfo,
+  RelatedTag,
   SearchResult,
+  TaggedNote,
   TemplateSummary,
   TreeNode,
   Vault,
@@ -93,7 +107,23 @@ export const api = {
     request<SearchResult[]>(`/vaults/${vaultId}/search?q=${encodeURIComponent(q)}`),
   listTags: (vaultId: string) => request<Record<string, number>>(`/vaults/${vaultId}/tags`),
   notesForTag: (vaultId: string, tag: string) =>
-    request<{ path: string; title: string }[]>(`/vaults/${vaultId}/tags/${encodeURIComponent(tag)}/notes`),
+    request<TaggedNote[]>(`/vaults/${vaultId}/tags/${encodeURIComponent(tag)}/notes`),
+  relatedTags: (vaultId: string, tag: string) =>
+    request<RelatedTag[]>(`/vaults/${vaultId}/tags/${encodeURIComponent(tag)}/related`),
+  renameTag: (vaultId: string, tag: string, newTag: string) =>
+    request<{ touched_notes: string[] }>(`/vaults/${vaultId}/tags/${encodeURIComponent(tag)}/rename`, {
+      method: 'POST',
+      body: JSON.stringify({ new_tag: newTag }),
+    }),
+  mergeTags: (vaultId: string, tags: string[], into: string) =>
+    request<{ touched_notes: string[] }>(`/vaults/${vaultId}/tags/merge`, {
+      method: 'POST',
+      body: JSON.stringify({ tags, into }),
+    }),
+  deleteTag: (vaultId: string, tag: string) =>
+    request<{ touched_notes: string[] }>(`/vaults/${vaultId}/tags/${encodeURIComponent(tag)}`, {
+      method: 'DELETE',
+    }),
 
   // Graph
   globalGraph: (
@@ -112,6 +142,69 @@ export const api = {
     request<GraphData>(`/vaults/${vaultId}/graph/local/${encodeSegments(path)}?depth=${depth}`),
   backlinks: (vaultId: string, path: string) =>
     request<BacklinksResponse>(`/vaults/${vaultId}/backlinks/${encodeSegments(path)}`),
+  graphStats: (vaultId: string, clusterStrategy: 'folder' | 'connected' = 'folder') =>
+    request<GraphStats>(`/vaults/${vaultId}/graph/stats?cluster_strategy=${clusterStrategy}`),
+  graphClusters: (vaultId: string, strategy: 'folder' | 'connected' = 'folder') =>
+    request<GraphCluster[]>(`/vaults/${vaultId}/graph/clusters?strategy=${strategy}`),
+  knowledgePath: (vaultId: string, source: string, target: string) =>
+    request<GraphData>(`/vaults/${vaultId}/graph/path`, {
+      method: 'POST',
+      body: JSON.stringify({ source, target }),
+    }),
+
+  // Knowledge health
+  health: (vaultId: string) => request<HealthReport>(`/vaults/${vaultId}/health`),
+  orphans: (vaultId: string) => request<OrphanNote[]>(`/vaults/${vaultId}/orphans`),
+  brokenLinks: (vaultId: string) => request<BrokenLinkGroup[]>(`/vaults/${vaultId}/broken-links`),
+  duplicates: (vaultId: string) => request<DuplicateCandidate[]>(`/vaults/${vaultId}/duplicates`),
+
+  // Collections
+  listCollections: (vaultId: string) => request<Collection[]>(`/vaults/${vaultId}/collections`),
+  createCollection: (vaultId: string, name: string, filter: NoteFilterCriteria) =>
+    request<Collection>(`/vaults/${vaultId}/collections`, {
+      method: 'POST',
+      body: JSON.stringify({ name, filter }),
+    }),
+  deleteCollection: (vaultId: string, id: string) =>
+    request<void>(`/vaults/${vaultId}/collections/${id}`, { method: 'DELETE' }),
+  collectionNotes: (vaultId: string, id: string) =>
+    request<FilteredNote[]>(`/vaults/${vaultId}/collections/${id}/notes`),
+  previewCollection: (vaultId: string, filter: NoteFilterCriteria) =>
+    request<FilteredNote[]>(`/vaults/${vaultId}/collections/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ name: '', filter }),
+    }),
+
+  // Graph snapshots
+  listSnapshots: (vaultId: string) => request<GraphSnapshot[]>(`/vaults/${vaultId}/graph-snapshots`),
+  createSnapshot: (vaultId: string, name: string, state: Record<string, unknown>) =>
+    request<GraphSnapshot>(`/vaults/${vaultId}/graph-snapshots`, {
+      method: 'POST',
+      body: JSON.stringify({ name, state }),
+    }),
+  deleteSnapshot: (vaultId: string, id: string) =>
+    request<void>(`/vaults/${vaultId}/graph-snapshots/${id}`, { method: 'DELETE' }),
+
+  // Canvas
+  listCanvases: (vaultId: string) => request<string[]>(`/vaults/${vaultId}/canvas`),
+  createCanvas: (vaultId: string, path: string, name: string) =>
+    request<{ path: string }>(`/vaults/${vaultId}/canvas`, {
+      method: 'POST',
+      body: JSON.stringify({ path, name }),
+    }),
+  readCanvas: (vaultId: string, path: string) =>
+    request<CanvasDocument>(`/vaults/${vaultId}/canvas/${encodeSegments(path)}`),
+  writeCanvas: (vaultId: string, path: string, doc: CanvasDocument) =>
+    request<{ path: string }>(`/vaults/${vaultId}/canvas/${encodeSegments(path)}`, {
+      method: 'PUT',
+      body: JSON.stringify(doc),
+    }),
+  deleteCanvas: (vaultId: string, path: string) =>
+    request<void>(`/vaults/${vaultId}/canvas/${encodeSegments(path)}`, { method: 'DELETE' }),
+
+  // Activity
+  listActivity: (vaultId: string, limit = 200) =>
+    request<ActivityEntry[]>(`/vaults/${vaultId}/activity?limit=${limit}`),
 
   // Templates
   listTemplates: (vaultId: string) => request<TemplateSummary[]>(`/vaults/${vaultId}/templates`),

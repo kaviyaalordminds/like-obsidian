@@ -7,10 +7,14 @@ Every derived view — the file tree, the graph, backlinks, search results, tags
 The database (SQLite by default; point `DATABASE_URL` at Postgres for production) holds only:
 
 - `vaults` — name, slug, on-disk folder mapping
-- `vault_settings` — appearance/editor/graph/daily-notes preferences, as JSON
+- `vault_settings` — appearance/editor/graph/daily-notes/visual-effects preferences, as JSON
 - `templates` — template name → path pointer (the template content itself is a `.md` file)
-- `activities` — a lightweight audit trail of create/rename/move/delete/save operations
+- `activities` — a lightweight audit trail of create/rename/move/delete/save operations, and the source data for the Activity/Timeline page
 - `plugins` — per-vault enabled/disabled flags for the plugin registry
+- `collections` — saved dynamic filter queries (a name + a `NoteFilter` JSON blob); re-evaluated against the live index every time the collection is opened, so results are never stale
+- `graph_snapshots` — a named, restorable point-in-time capture of graph state (filters + zoom + selection + layout + mode) as JSON
+
+Canvas boards (`.canvas` files) are deliberately **not** a database table — like notes, a canvas is a file in the vault (see [PLUGINS.md](PLUGINS.md#canvas)), keeping the "filesystem is the source of truth" rule intact for anything that qualifies as vault content rather than app preference/metadata.
 
 See [`backend/app/models.py`](../backend/app/models.py).
 
@@ -30,8 +34,15 @@ services/        all real logic lives here, framework-agnostic
   daily_notes_service.py
   import_export_service.py   zip import (zip-slip guarded) / export
   plugin_registry.py    the plugin interface + static roadmap manifest
+  graph_metrics_service.py   degree/stats/cluster/shortest-path computation over a built graph
+  health_service.py     broken links, orphans, duplicate-title candidates (Jaccard similarity)
+  tag_service.py        tag rename/merge/delete (rewrites Markdown), related-tags co-occurrence
+  filter_service.py     the combinable multi-filter engine behind Graph filters and Collections
+  canvas_service.py     read/write/create/delete `.canvas` files (same file-based pattern as notes)
 security.py       safe_join() — the one function every filesystem path passes through
 ```
+
+Every one of these new services is a pure function of the same `IndexService` the original graph/search/backlinks services read from — none introduce a second source of truth, and none cache anything beyond what `IndexService` already caches. `GET /graph/stats`, `/graph/clusters`, `/health`, `/orphans`, `/broken-links`, `/duplicates` are all computed fresh on every request for that reason: the spec's "never hardcoded, never fake" requirement for graph/health numbers is satisfied structurally, not by a rule someone has to remember to follow.
 
 ### Why an IndexService per vault?
 
@@ -50,12 +61,15 @@ store/          Zustand stores — one responsibility each
   vaultStore        known vaults, current vault, file tree
   noteStore         per-path {content, dirty, saveStatus}, debounced autosave
   workspaceStore     tabs, panes (split editor), navigation history
-  uiStore           sidebar/modal visibility, editor mode
-  settingsStore     theme/editor/graph/daily-notes prefs, localStorage + per-vault sync
+  uiStore           sidebar/modal visibility, editor mode, mainView, focus/zen mode
+  settingsStore     theme/editor/graph/daily-notes/visual-effects prefs, localStorage + per-vault sync
+  graphStore        graph mode, filters, selection, pin/hide sets, exploration history, open panel
 api/client.ts    typed fetch wrapper, one function per endpoint
-lib/             pure functions: wikilink transform, tree flatten/resolve, debounce, ...
-components/       organized by feature (Editor, FileExplorer, Graph, Search, Sidebar, ...)
+lib/             pure functions: wikilink transform, tree flatten/resolve, debounce, graph metrics, graph export, ...
+components/       organized by feature (Editor, FileExplorer, Graph, Search, Sidebar, Canvas, Health, Tags, Collections, Activity, ...)
 ```
+
+`mainView` in `uiStore` is what the top navigation (Vault/Notes/Graph/Canvas/Tags/Collections/Activity/Knowledge Health) switches between; each non-editor view (`GlobalGraphPage`, `CanvasPage`, `HealthDashboard`, `TagIntelligencePage`, `CollectionsPage`, `ActivityPage`) is `React.lazy`-loaded from `AppShell.tsx` the same way `GraphView` already was, so the initial bundle only pays for whichever view is opened first.
 
 Note content flows: `NotePane` reads/writes `noteStore`, which debounces `PUT /notes/{path}` calls and exposes a `saving | saved | error` status the UI renders directly — see [docs/DEVELOPMENT.md](DEVELOPMENT.md) for the autosave contract.
 

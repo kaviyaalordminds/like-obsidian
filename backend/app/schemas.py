@@ -117,3 +117,133 @@ class SettingsOut(BaseModel):
 
 class SettingsUpdate(BaseModel):
     data: dict
+
+
+# --- Tags ---
+
+
+class TagRenameRequest(BaseModel):
+    new_tag: str
+
+
+class TagMergeRequest(BaseModel):
+    tags: list[str]
+    into: str
+
+
+# --- Graph metrics / clusters / path ---
+
+
+class GraphStatsOut(BaseModel):
+    node_count: int
+    edge_count: int
+    cluster_count: int
+    orphan_count: int
+    density: float
+    avg_connections: float
+    most_connected: list[dict]
+
+
+class ClusterOut(BaseModel):
+    id: str
+    label: str
+    node_ids: list[str]
+
+
+class PathRequest(BaseModel):
+    source: str
+    target: str
+
+
+# --- Knowledge health ---
+
+
+class HealthReportOut(BaseModel):
+    orphan_count: int
+    broken_link_count: int
+    duplicate_count: int
+    unused_tag_count: int
+    empty_note_count: int
+    large_note_count: int
+    old_note_count: int
+    no_metadata_count: int
+    recommendations: list[str]
+
+
+# --- Collections ---
+
+
+class CollectionCreate(BaseModel):
+    name: str
+    filter: dict = Field(default_factory=dict)
+
+
+class CollectionOut(BaseModel):
+    id: str
+    name: str
+    filter: dict
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
+# --- Graph snapshots ---
+
+
+class SnapshotCreate(BaseModel):
+    name: str
+    state: dict = Field(default_factory=dict)
+
+
+class SnapshotOut(BaseModel):
+    id: str
+    name: str
+    state: dict
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
+# --- Canvas ---
+
+
+class CanvasNodeIn(BaseModel):
+    id: str
+    type: str
+    x: float = 0
+    y: float = 0
+    width: float = 240
+    height: float = 120
+    note_path: str | None = None
+    text: str | None = None
+    color: str | None = None
+
+
+class CanvasEdgeIn(BaseModel):
+    id: str
+    from_node: str
+    to_node: str
+    label: str | None = None
+
+
+class CanvasWrite(BaseModel):
+    nodes: list[CanvasNodeIn]
+    edges: list[CanvasEdgeIn]
+
+
+class CanvasCreate(BaseModel):
+    path: str
+    name: str
+
+
+# --- Activity ---
+
+
+class ActivityOut(BaseModel):
+    id: str
+    note_path: str
+    action: str
+    detail: str
+    created_at: str
+
+    model_config = {"from_attributes": True}

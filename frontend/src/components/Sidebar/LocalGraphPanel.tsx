@@ -26,17 +26,17 @@ export function LocalGraphPanel({ path, onOpenNote }: Props) {
       <div className="flex items-center justify-between px-3 py-2 border-b text-xs" style={{ borderColor: 'var(--color-border)' }}>
         <span className="text-[var(--color-text-faint)]">Depth</span>
         <div className="flex gap-1">
-          {[1, 2, 3].map((d) => (
+          {[1, 2, 3, -1].map((d) => (
             <button
               key={d}
               onClick={() => updateGraph({ depth: d })}
-              className="w-6 h-6 rounded text-xs"
+              className="min-w-6 h-6 px-1.5 rounded text-xs"
               style={{
                 background: depth === d ? 'var(--color-accent-soft)' : 'transparent',
                 color: depth === d ? 'var(--color-accent)' : 'var(--color-text-muted)',
               }}
             >
-              {d}
+              {d === -1 ? 'All' : d}
             </button>
           ))}
         </div>

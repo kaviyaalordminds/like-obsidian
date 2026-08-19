@@ -28,17 +28,27 @@ export interface DailyNoteSettings {
   templatePath: string
 }
 
+export interface EffectsSettings {
+  enabled: boolean // master Visual Effects switch (Section 50)
+  showGrid: boolean
+  showGlow: boolean
+  showHud: boolean
+  reducedMotion: boolean
+}
+
 interface SettingsState {
   theme: Theme
   editor: EditorSettings
   graph: GraphSettings
   dailyNotes: DailyNoteSettings
+  effects: EffectsSettings
   loaded: boolean
 
   setTheme: (theme: Theme) => void
   updateEditor: (patch: Partial<EditorSettings>) => void
   updateGraph: (patch: Partial<GraphSettings>) => void
   updateDailyNotes: (patch: Partial<DailyNoteSettings>) => void
+  updateEffects: (patch: Partial<EffectsSettings>) => void
   loadFromVault: (vaultId: string) => Promise<void>
   persist: (vaultId: string) => void
 }
@@ -59,6 +69,7 @@ const defaults = {
     showUnresolved: true,
   } as GraphSettings,
   dailyNotes: { folder: 'Daily Notes', dateFormat: '%Y-%m-%d', templatePath: '' } as DailyNoteSettings,
+  effects: { enabled: true, showGrid: true, showGlow: true, showHud: true, reducedMotion: false } as EffectsSettings,
 }
 
 function loadLocal() {
@@ -71,6 +82,7 @@ function loadLocal() {
       editor: { ...defaults.editor, ...parsed.editor },
       graph: { ...defaults.graph, ...parsed.graph },
       dailyNotes: { ...defaults.dailyNotes, ...parsed.dailyNotes },
+      effects: { ...defaults.effects, ...parsed.effects },
     }
   } catch {
     return defaults
@@ -83,11 +95,18 @@ function applyThemeToDom(theme: Theme) {
   else root.setAttribute('data-theme', theme)
 }
 
+function applyEffectsToDom(effects: EffectsSettings) {
+  const root = document.documentElement
+  root.setAttribute('data-effects', effects.enabled ? 'on' : 'off')
+  root.setAttribute('data-motion', effects.reducedMotion ? 'reduced' : 'normal')
+}
+
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useSettingsStore = create<SettingsState>((set, get) => {
   const initial = loadLocal()
   applyThemeToDom(initial.theme)
+  applyEffectsToDom(initial.effects)
 
   return {
     ...initial,
@@ -110,6 +129,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       set((s) => ({ dailyNotes: { ...s.dailyNotes, ...patch } }))
       saveLocal(get())
     },
+    updateEffects: (patch) => {
+      set((s) => {
+        const effects = { ...s.effects, ...patch }
+        applyEffectsToDom(effects)
+        return { effects }
+      })
+      saveLocal(get())
+    },
 
     loadFromVault: async (vaultId: string) => {
       try {
@@ -120,8 +147,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
             editor: { ...get().editor, ...(res.data.editor as object) },
             graph: { ...get().graph, ...(res.data.graph as object) },
             dailyNotes: { ...get().dailyNotes, ...(res.data.dailyNotes as object) },
+            effects: { ...get().effects, ...(res.data.effects as object) },
           }
           applyThemeToDom(merged.theme)
+          applyEffectsToDom(merged.effects)
           set({ ...merged, loaded: true })
           saveLocal(get())
         } else {
@@ -136,7 +165,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       if (persistTimer) clearTimeout(persistTimer)
       persistTimer = setTimeout(() => {
         const s = get()
-        api.updateSettings(vaultId, { theme: s.theme, editor: s.editor, graph: s.graph, dailyNotes: s.dailyNotes })
+        api.updateSettings(vaultId, {
+          theme: s.theme,
+          editor: s.editor,
+          graph: s.graph,
+          dailyNotes: s.dailyNotes,
+          effects: s.effects,
+        })
       }, 500)
     },
   }
@@ -145,6 +180,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 function saveLocal(s: SettingsState) {
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ theme: s.theme, editor: s.editor, graph: s.graph, dailyNotes: s.dailyNotes }),
+    JSON.stringify({ theme: s.theme, editor: s.editor, graph: s.graph, dailyNotes: s.dailyNotes, effects: s.effects }),
   )
 }

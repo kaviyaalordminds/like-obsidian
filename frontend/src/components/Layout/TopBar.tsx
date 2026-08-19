@@ -1,9 +1,38 @@
-import { ArrowLeft, ArrowRight, PanelLeft, PanelRight, Search, Command, Settings, Share2, Sparkles, CalendarDays } from 'lucide-react'
-import { useUIStore } from '@/store/uiStore'
+import {
+  ArrowLeft,
+  ArrowRight,
+  PanelLeft,
+  PanelRight,
+  Search,
+  Command,
+  Settings,
+  Share2,
+  Sparkles,
+  CalendarDays,
+  FileText,
+  LayoutDashboard,
+  Hash,
+  Layers,
+  History,
+  HeartPulse,
+  Focus,
+  Minimize2,
+} from 'lucide-react'
+import { useUIStore, type MainView } from '@/store/uiStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useVaultStore } from '@/store/vaultStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { api } from '@/api/client'
+
+const NAV: { id: MainView; label: string; icon: React.ComponentType<{ size?: number }>; shortcut?: string }[] = [
+  { id: 'editor', label: 'Notes', icon: FileText },
+  { id: 'graph', label: 'Graph', icon: Share2, shortcut: 'Ctrl+Shift+G' },
+  { id: 'canvas', label: 'Canvas', icon: LayoutDashboard },
+  { id: 'tags', label: 'Tags', icon: Hash },
+  { id: 'collections', label: 'Collections', icon: Layers },
+  { id: 'activity', label: 'Activity', icon: History },
+  { id: 'health', label: 'Knowledge Health', icon: HeartPulse },
+]
 
 export function TopBar() {
   const toggleLeftSidebar = useUIStore((s) => s.toggleLeftSidebar)
@@ -14,6 +43,8 @@ export function TopBar() {
   const setVaultSwitcherOpen = useUIStore((s) => s.setVaultSwitcherOpen)
   const mainView = useUIStore((s) => s.mainView)
   const setMainView = useUIStore((s) => s.setMainView)
+  const toggleFocusMode = useUIStore((s) => s.toggleFocusMode)
+  const toggleZenMode = useUIStore((s) => s.toggleZenMode)
 
   const back = useWorkspaceStore((s) => s.back)
   const forward = useWorkspaceStore((s) => s.forward)
@@ -61,15 +92,21 @@ export function TopBar() {
         </button>
       </div>
 
+      <div className="hidden md:flex items-center gap-0.5">
+        {NAV.map(({ id, label, icon: Icon, shortcut }) => (
+          <button
+            key={id}
+            title={shortcut ? `${label} (${shortcut})` : label}
+            onClick={() => setMainView(id)}
+            className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]"
+            style={{ color: mainView === id ? 'var(--color-accent)' : undefined, background: mainView === id ? 'var(--color-accent-soft)' : undefined }}
+          >
+            <Icon size={16} />
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center gap-1">
-        <button
-          title="Graph view (Ctrl+Shift+G)"
-          onClick={() => setMainView(mainView === 'graph' ? 'editor' : 'graph')}
-          className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]"
-          style={{ color: mainView === 'graph' ? 'var(--color-accent)' : undefined }}
-        >
-          <Share2 size={16} />
-        </button>
         <button title="Daily note" onClick={createDailyNote} className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]">
           <CalendarDays size={16} />
         </button>
@@ -78,6 +115,12 @@ export function TopBar() {
         </button>
         <button title="Command palette (Ctrl+K)" onClick={() => setCommandPaletteOpen(true)} className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]">
           <Command size={16} />
+        </button>
+        <button title="Focus mode (Ctrl+Shift+F11)" onClick={toggleFocusMode} className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]">
+          <Focus size={16} />
+        </button>
+        <button title="Zen mode" onClick={toggleZenMode} className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]">
+          <Minimize2 size={16} />
         </button>
         <button title="Settings (Ctrl+,)" onClick={() => setSettingsOpen(true)} className="p-1.5 rounded hover:bg-[var(--color-bg-inset)]">
           <Settings size={16} />
