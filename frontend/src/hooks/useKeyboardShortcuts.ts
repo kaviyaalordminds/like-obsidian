@@ -72,6 +72,7 @@ export function useKeyboardShortcuts() {
         if (ui.commandPaletteOpen) ui.setCommandPaletteOpen(false)
         if (ui.quickSwitcherOpen) ui.setQuickSwitcherOpen(false)
         if (ui.searchPanelOpen) ui.setSearchPanelOpen(false)
+        if (ui.settingsOpen) ui.setSettingsOpen(false)
         if (ui.focusMode || ui.zenMode) ui.exitFocusModes()
       }
     }

@@ -1,5 +1,9 @@
 import type {
   ActivityEntry,
+  AIAction,
+  AIConfig,
+  AIContextPreview,
+  AIContextSelection,
   BacklinksResponse,
   BrokenLinkGroup,
   CanvasDocument,
@@ -254,6 +258,69 @@ export const api = {
       body: form,
     })
   },
+
+  // AI Agent
+  getAIConfig: (vaultId: string) => request<AIConfig>(`/vaults/${vaultId}/ai/config`),
+  setAIConfig: (vaultId: string, patch: { api_key?: string; provider?: string; model?: string; auto_approve_safe?: boolean }) =>
+    request<AIConfig>(`/vaults/${vaultId}/ai/config`, { method: 'PUT', body: JSON.stringify(patch) }),
+  listAIActions: (vaultId: string, limit = 50) => request<AIAction[]>(`/vaults/${vaultId}/ai/actions?limit=${limit}`),
+  aiContextPreview: (vaultId: string, context: AIContextSelection) =>
+    request<AIContextPreview>(`/vaults/${vaultId}/ai/context/preview`, { method: 'POST', body: JSON.stringify(context) }),
+}
+
+/** One increment of a streamed agent turn, mirroring the backend's SSE event shapes. */
+export type AIStreamEvent =
+  | { type: 'text_delta'; text: string }
+  | { type: 'tool_result'; tool_name: string; tool_input: Record<string, unknown>; result: unknown }
+  | { type: 'pending_confirmation'; action_id: string; tool_name: string; tool_input: Record<string, unknown>; safety: string }
+  | { type: 'done' }
+  | { type: 'error'; error: string }
+
+async function streamSSE(path: string, body: unknown, onEvent: (event: AIStreamEvent) => void, signal?: AbortSignal): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.ok) {
+    let detail = res.statusText
+    try {
+      detail = (await res.json()).detail ?? detail
+    } catch {
+      // ignore
+    }
+    onEvent({ type: 'error', error: detail })
+    return
+  }
+  const reader = res.body?.getReader()
+  if (!reader) return
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() ?? ''
+    for (const chunk of chunks) {
+      const line = chunk.split('\n').find((l) => l.startsWith('data: '))
+      if (!line) continue
+      try {
+        onEvent(JSON.parse(line.slice('data: '.length)))
+      } catch {
+        // ignore malformed chunk
+      }
+    }
+  }
+}
+
+export function streamAIChat(vaultId: string, conversationId: string, message: string, context: AIContextSelection | null, onEvent: (e: AIStreamEvent) => void, signal?: AbortSignal) {
+  return streamSSE(`/vaults/${vaultId}/ai/chat`, { conversation_id: conversationId, message, context }, onEvent, signal)
+}
+
+export function streamAIConfirm(vaultId: string, conversationId: string, approved: boolean, onEvent: (e: AIStreamEvent) => void, signal?: AbortSignal) {
+  return streamSSE(`/vaults/${vaultId}/ai/confirm`, { conversation_id: conversationId, approved }, onEvent, signal)
 }
 
 function encodeSegments(path: string): string {

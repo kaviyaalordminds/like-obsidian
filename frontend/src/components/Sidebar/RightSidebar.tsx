@@ -1,9 +1,10 @@
 import { Suspense, lazy } from 'react'
-import { Link2, List, Hash, Share2 } from 'lucide-react'
+import { Link2, List, Hash, Share2, Bot } from 'lucide-react'
 import { useUIStore, type RightPanelTab } from '@/store/uiStore'
 import { BacklinksPanel } from './BacklinksPanel'
 import { OutlinePanel } from './OutlinePanel'
 import { TagsPanel } from './TagsPanel'
+import { AIChatPanel } from '@/components/AI/AIChatPanel'
 
 // Pulls in cytoscape; keep it out of the main bundle until the tab is opened.
 const LocalGraphPanel = lazy(() => import('./LocalGraphPanel').then((m) => ({ default: m.LocalGraphPanel })))
@@ -18,6 +19,7 @@ const tabs: { id: RightPanelTab; icon: React.ComponentType<{ size?: number }>; l
   { id: 'outline', icon: List, label: 'Outline' },
   { id: 'tags', icon: Hash, label: 'Tags' },
   { id: 'local-graph', icon: Share2, label: 'Local graph' },
+  { id: 'ai', icon: Bot, label: 'AI Agent' },
 ]
 
 export function RightSidebar({ activePath, onOpenNote }: Props) {
@@ -43,7 +45,9 @@ export function RightSidebar({ activePath, onOpenNote }: Props) {
         ))}
       </div>
       <div className="flex-1 min-h-0">
-        {!activePath ? (
+        {tab === 'ai' ? (
+          <AIChatPanel />
+        ) : !activePath ? (
           <div className="p-3 text-xs text-[var(--color-text-faint)]">Open a note to see details.</div>
         ) : tab === 'backlinks' ? (
           <BacklinksPanel path={activePath} onOpenNote={onOpenNote} />

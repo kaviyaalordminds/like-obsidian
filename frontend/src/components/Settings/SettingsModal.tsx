@@ -6,8 +6,9 @@ import { useVaultStore } from '@/store/vaultStore'
 import { TemplatesTab } from './TemplatesTab'
 import { PluginsTab } from './PluginsTab'
 import { HotkeysTab } from './HotkeysTab'
+import { AITab } from './AITab'
 
-type Tab = 'appearance' | 'editor' | 'graph' | 'daily-notes' | 'templates' | 'hotkeys' | 'plugins' | 'vault'
+type Tab = 'appearance' | 'editor' | 'graph' | 'daily-notes' | 'templates' | 'hotkeys' | 'plugins' | 'ai' | 'vault'
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
@@ -17,6 +18,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'templates', label: 'Templates' },
   { id: 'hotkeys', label: 'Hotkeys' },
   { id: 'plugins', label: 'Plugins' },
+  { id: 'ai', label: 'AI' },
   { id: 'vault', label: 'Vault' },
 ]
 
@@ -230,6 +232,7 @@ export function SettingsModal() {
             {tab === 'templates' && <TemplatesTab />}
             {tab === 'hotkeys' && <HotkeysTab />}
             {tab === 'plugins' && <PluginsTab />}
+            {tab === 'ai' && <AITab />}
 
             {tab === 'vault' && vault && (
               <div className="space-y-3 text-sm">

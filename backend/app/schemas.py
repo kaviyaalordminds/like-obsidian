@@ -250,3 +250,45 @@ class ActivityOut(BaseModel):
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+# --- AI Agent ---
+
+
+class AIConfigIn(BaseModel):
+    api_key: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    auto_approve_safe: bool | None = None
+
+
+class AIConfigOut(BaseModel):
+    configured: bool
+    provider: str
+    model: str
+    auto_approve_safe: bool
+
+
+class AIChatRequest(BaseModel):
+    conversation_id: str
+    message: str
+    context: dict | None = None  # Part 40/41: {kind, paths} — see ai router
+
+
+class AIConfirmRequest(BaseModel):
+    conversation_id: str
+    approved: bool
+
+
+class AIActionOut(BaseModel):
+    id: str
+    conversation_id: str
+    tool_name: str
+    tool_input: dict
+    safety: str
+    status: str
+    summary: str
+    result: str
+    created_at: str
+
+    model_config = {"from_attributes": True}

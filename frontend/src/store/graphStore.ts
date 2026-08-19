@@ -61,6 +61,7 @@ interface GraphState {
   selectNode: (id: string | null, opts?: { pushHistory?: boolean }) => void
   setHoveredNode: (id: string | null) => void
   togglePin: (id: string) => void
+  highlightNodes: (ids: string[]) => void
   toggleHidden: (id: string) => void
   showHiddenNodes: () => void
   back: () => void
@@ -140,6 +141,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       else next.add(id)
       return { pinnedNodeIds: next }
     }),
+
+  highlightNodes: (ids) =>
+    set((s) => ({ pinnedNodeIds: new Set([...s.pinnedNodeIds, ...ids]) })),
 
   toggleHidden: (id) =>
     set((s) => {

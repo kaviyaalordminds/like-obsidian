@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import init_db
 from app.routers import (
     activity,
+    ai,
     canvas,
     collections,
     daily_notes,
@@ -65,3 +66,4 @@ app.include_router(collections.router)
 app.include_router(snapshots.router)
 app.include_router(canvas.router)
 app.include_router(activity.router)
+app.include_router(ai.router)

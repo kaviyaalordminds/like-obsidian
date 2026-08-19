@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export type EditorMode = 'edit' | 'preview' | 'split'
-export type RightPanelTab = 'backlinks' | 'outline' | 'tags' | 'local-graph'
+export type RightPanelTab = 'backlinks' | 'outline' | 'tags' | 'local-graph' | 'ai'
 export type MainView = 'editor' | 'graph' | 'canvas' | 'health' | 'tags' | 'collections' | 'activity'
 
 interface UIState {

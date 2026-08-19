@@ -259,3 +259,55 @@ export interface ActivityEntry {
   detail: string
   created_at: string
 }
+
+// --- AI Agent ---
+
+export interface AIConfig {
+  configured: boolean
+  provider: string
+  model: string
+  auto_approve_safe: boolean
+}
+
+export interface AIAction {
+  id: string
+  conversation_id: string
+  tool_name: string
+  tool_input: Record<string, unknown>
+  safety: 'read' | 'write' | 'destructive'
+  status: 'executed' | 'pending' | 'approved' | 'rejected' | 'error'
+  summary: string
+  result: string
+  created_at: string
+}
+
+export interface AIToolCallRecord {
+  toolName: string
+  toolInput: Record<string, unknown>
+  result?: unknown
+  status: 'running' | 'done' | 'pending_confirmation' | 'rejected'
+  actionId?: string
+  safety?: string
+}
+
+export interface AIChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  toolCalls: AIToolCallRecord[]
+}
+
+export interface AIContextSelection {
+  kind: 'note' | 'notes' | 'local_graph' | 'cluster' | 'search_results' | 'folder' | 'vault'
+  paths?: string[]
+  path?: string
+  folder?: string
+  depth?: number
+}
+
+export interface AIContextPreview {
+  note_count: number
+  word_count: number
+  tags: string[]
+  paths: string[]
+}

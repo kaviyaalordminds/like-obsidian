@@ -48,6 +48,12 @@ class Vault(Base):
     graph_snapshots: Mapped[list["GraphSnapshot"]] = relationship(
         back_populates="vault", cascade="all, delete-orphan"
     )
+    ai_config: Mapped["AIConfig"] = relationship(
+        back_populates="vault", uselist=False, cascade="all, delete-orphan"
+    )
+    ai_actions: Mapped[list["AIAction"]] = relationship(
+        back_populates="vault", cascade="all, delete-orphan"
+    )
 
 
 class VaultSettings(Base):
@@ -133,3 +139,47 @@ class GraphSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     vault: Mapped[Vault] = relationship(back_populates="graph_snapshots")
+
+
+class AIConfig(Base):
+    """Per-vault AI provider configuration. `api_key` is stored server-side
+    only — every response schema that returns this row omits it, so the key
+    never round-trips back to the client after it's set (Part 40/57: the AI
+    layer is opt-in and its credentials stay local, never exposed further
+    than they need to be)."""
+
+    __tablename__ = "ai_config"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vault_id: Mapped[str] = mapped_column(ForeignKey("vaults.id"), unique=True)
+    provider: Mapped[str] = mapped_column(String(32), default="anthropic")
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model: Mapped[str] = mapped_column(String(64), default="claude-opus-5")
+    auto_approve_safe: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    vault: Mapped[Vault] = relationship(back_populates="ai_config")
+
+
+class AIAction(Base):
+    """Durable, transparent log of every AI tool call (Part 42) — reads and
+    writes alike, so "what did the AI actually do" is always answerable
+    from the vault's own local history, never trust-me-bro. `status` tracks
+    the write-tool confirmation lifecycle; read tools are logged already
+    `executed` since they run immediately."""
+
+    __tablename__ = "ai_actions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vault_id: Mapped[str] = mapped_column(ForeignKey("vaults.id"))
+    conversation_id: Mapped[str] = mapped_column(String(36))
+    tool_name: Mapped[str] = mapped_column(String(64))
+    tool_input: Mapped[dict] = mapped_column(JSON, default=dict)
+    safety: Mapped[str] = mapped_column(String(16))  # read | write | destructive
+    status: Mapped[str] = mapped_column(String(16))  # executed | pending | approved | rejected | error
+    summary: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    vault: Mapped[Vault] = relationship(back_populates="ai_actions")

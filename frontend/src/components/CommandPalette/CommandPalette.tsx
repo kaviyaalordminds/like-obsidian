@@ -20,6 +20,7 @@ import {
   HeartPulse,
   Focus,
   Minimize2,
+  Bot,
 } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useVaultStore } from '@/store/vaultStore'
@@ -121,6 +122,7 @@ export function CommandPalette() {
     { icon: Layers, label: 'Open collections', action: () => setMainView('collections') },
     { icon: History, label: 'Open activity', action: () => setMainView('activity') },
     { icon: HeartPulse, label: 'Open knowledge health', action: () => setMainView('health') },
+    { icon: Bot, label: 'Ask the AI Agent', action: () => useUIStore.getState().setRightPanelTab('ai') },
     { icon: Search, label: 'Search vault', action: () => setSearchPanelOpen(true) },
     { icon: Settings, label: 'Open settings', action: () => setSettingsOpen(true) },
     { icon: PanelLeft, label: 'Toggle sidebar', action: toggleLeftSidebar },
