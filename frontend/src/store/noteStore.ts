@@ -18,6 +18,7 @@ interface NoteState {
   saveNow: (vaultId: string, path: string) => Promise<void>
   evict: (path: string) => void
   renamePath: (oldPath: string, newPath: string, note: Note) => void
+  syncFromExternal: (vaultId: string, path: string) => Promise<void>
 }
 
 const savers = new Map<string, ReturnType<typeof debounce>>()
@@ -101,6 +102,20 @@ export const useNoteStore = create<NoteState>((set, get) => ({
       return {
         entries: entry ? { ...rest, [newPath]: { ...entry, note } } : rest,
       }
+    })
+  },
+
+  // Pulls in an external edit (another tab, the AI agent, a second device)
+  // to a note that's already open here — but only while it has no unsaved
+  // local edits, so a background sync can never clobber in-progress typing.
+  syncFromExternal: async (vaultId, path) => {
+    const entry = get().entries[path]
+    if (!entry || entry.dirty) return
+    const note = await api.getNote(vaultId, path)
+    set((s) => {
+      const current = s.entries[path]
+      if (!current || current.dirty) return {}
+      return { entries: { ...s.entries, [path]: { ...current, note, content: note.content, status: 'saved' } } }
     })
   },
 }))

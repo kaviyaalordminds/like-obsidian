@@ -19,6 +19,7 @@ from typing import Iterator
 from sqlalchemy.orm import Session
 
 from app import models
+from app.services.event_bus import bus
 from .provider import AIProvider
 from .tools import TOOLS_BY_NAME, ToolContext, anthropic_tool_defs
 
@@ -126,12 +127,15 @@ def _agent_loop(convo: Conversation, ctx: ToolContext, provider: AIProvider, aut
                 }
                 return  # one pending action at a time; resume via /confirm
 
+            bus.publish(ctx.vault_id, "AI_ACTION_STARTED", {"tool_name": tool.name, "safety": tool.safety})
             try:
                 result = tool.handler(ctx, block["input"])
                 _log_action(ctx, convo.id, tool.name, block["input"], tool.safety, "executed", summary=tool.name, result=_truncate(result))
+                bus.publish(ctx.vault_id, "AI_ACTION_COMPLETED", {"tool_name": tool.name, "status": "executed"})
             except Exception as exc:  # tool errors are reported to the model, not raised
                 result = {"error": str(exc)}
                 _log_action(ctx, convo.id, tool.name, block["input"], tool.safety, "error", summary=tool.name, result=str(exc))
+                bus.publish(ctx.vault_id, "AI_ACTION_COMPLETED", {"tool_name": tool.name, "status": "error"})
 
             tool_results.append({"type": "tool_result", "tool_use_id": block["id"], "content": _truncate(result)})
             yield {"type": "tool_result", "tool_name": tool.name, "tool_input": block["input"], "result": result}
@@ -167,18 +171,21 @@ def resolve_pending(convo: Conversation, ctx: ToolContext, provider: AIProvider,
         return
 
     tool = TOOLS_BY_NAME[pending.tool_name]
+    bus.publish(ctx.vault_id, "AI_ACTION_STARTED", {"tool_name": tool.name, "safety": tool.safety})
     try:
         result = tool.handler(ctx, pending.tool_input)
         if action:
             action.status = "executed"
             action.result = _truncate(result)
             ctx.db.commit()
+        bus.publish(ctx.vault_id, "AI_ACTION_COMPLETED", {"tool_name": tool.name, "status": "executed"})
     except Exception as exc:
         result = {"error": str(exc)}
         if action:
             action.status = "error"
             action.result = str(exc)
             ctx.db.commit()
+        bus.publish(ctx.vault_id, "AI_ACTION_COMPLETED", {"tool_name": tool.name, "status": "error"})
 
     convo.messages.append(
         {"role": "user", "content": [{"type": "tool_result", "tool_use_id": pending.tool_use_id, "content": _truncate(result)}]}

@@ -9,7 +9,8 @@ from app import models, schemas
 from app.database import get_db
 from app.deps import get_vault, vault_root
 from app.services import suggestion_service, vault_service
-from app.services.index_service import get_index
+from app.services.event_bus import bus
+from app.services.index_service import IndexService, get_index
 from app.services.markdown_parser import parse_note
 from app.services.rename_service import apply_link_updates, plan_link_updates
 
@@ -19,6 +20,33 @@ router = APIRouter(prefix="/api/vaults/{vault_id}/notes", tags=["notes"])
 def _log(db: Session, vault: models.Vault, path: str, action: str, detail: str = "") -> None:
     db.add(models.Activity(vault_id=vault.id, note_path=path, action=action, detail=detail))
     db.commit()
+
+
+def _tags_and_links(index: IndexService, path: str) -> tuple[set[str], set[str]]:
+    note = index.get(path)
+    if not note:
+        return set(), set()
+    return set(note.parsed.tags), {l.target for l in note.parsed.links}
+
+
+def _publish_content_diff(vault_id: str, path: str, before: tuple[set[str], set[str]], after: tuple[set[str], set[str]]) -> None:
+    """Emits LINK_CREATED/LINK_REMOVED/TAG_CHANGED for a single note's own
+    edit (Part 55) — not for the ripple of link-target rewrites a rename or
+    move performs on other notes, where GRAPH_UPDATED already covers it."""
+    old_tags, old_links = before
+    new_tags, new_links = after
+    added_tags, removed_tags = new_tags - old_tags, old_tags - new_tags
+    if added_tags or removed_tags:
+        bus.publish(vault_id, "TAG_CHANGED", {"path": path, "added": sorted(added_tags), "removed": sorted(removed_tags)})
+    for target in new_links - old_links:
+        bus.publish(vault_id, "LINK_CREATED", {"path": path, "target": target})
+    for target in old_links - new_links:
+        bus.publish(vault_id, "LINK_REMOVED", {"path": path, "target": target})
+
+
+def _publish_structural(vault_id: str) -> None:
+    bus.publish(vault_id, "GRAPH_UPDATED", {})
+    bus.publish(vault_id, "VAULT_CHANGED", {})
 
 
 def _note_out(root, rel_path: str) -> schemas.NoteOut:
@@ -69,10 +97,14 @@ def create_note(
     payload: schemas.NoteCreate, vault: models.Vault = Depends(get_vault), db: Session = Depends(get_db)
 ):
     root = vault_root(vault)
-    vault_service.write_note(root, payload.path, payload.content)
-    get_index(root).refresh_path(payload.path if payload.path.endswith(".md") else payload.path + ".md")
-    _log(db, vault, payload.path, "create")
     rel = payload.path if payload.path.endswith(".md") else payload.path + ".md"
+    index = get_index(root)
+    vault_service.write_note(root, payload.path, payload.content)
+    index.refresh_path(rel)
+    _log(db, vault, payload.path, "create")
+    bus.publish(vault.id, "NOTE_CREATED", {"path": rel})
+    _publish_content_diff(vault.id, rel, (set(), set()), _tags_and_links(index, rel))
+    _publish_structural(vault.id)
     return _note_out(root, rel)
 
 
@@ -84,9 +116,14 @@ def save_note(
     db: Session = Depends(get_db),
 ):
     root = vault_root(vault)
+    index = get_index(root)
+    before = _tags_and_links(index, path)
     vault_service.write_note(root, path, payload.content)
-    get_index(root).refresh_path(path)
+    index.refresh_path(path)
     _log(db, vault, path, "save")
+    bus.publish(vault.id, "NOTE_UPDATED", {"path": path})
+    _publish_content_diff(vault.id, path, before, _tags_and_links(index, path))
+    _publish_structural(vault.id)
     return _note_out(root, path)
 
 
@@ -96,6 +133,8 @@ def delete_note(path: str, vault: models.Vault = Depends(get_vault), db: Session
     vault_service.delete_path(root, path)
     get_index(root).refresh_path(path)
     _log(db, vault, path, "delete")
+    bus.publish(vault.id, "NOTE_DELETED", {"path": path})
+    _publish_structural(vault.id)
     return None
 
 
@@ -116,6 +155,8 @@ def rename_note(
     index.refresh_path(path)
     index.refresh_path(new_rel)
     _log(db, vault, path, "rename", detail=f"{new_rel} (updated links in {len(updated)} notes)")
+    bus.publish(vault.id, "NOTE_RENAMED", {"old_path": path, "new_path": new_rel})
+    _publish_structural(vault.id)
     return _note_out(root, new_rel)
 
 
@@ -136,4 +177,6 @@ def move_note(
     index.refresh_path(path)
     index.refresh_path(new_rel)
     _log(db, vault, path, "move", detail=f"{new_rel} (updated links in {len(updated)} notes)")
+    bus.publish(vault.id, "NOTE_MOVED", {"old_path": path, "new_path": new_rel})
+    _publish_structural(vault.id)
     return _note_out(root, new_rel)

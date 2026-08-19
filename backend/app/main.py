@@ -13,6 +13,7 @@ from app.routers import (
     canvas,
     collections,
     daily_notes,
+    events,
     folders,
     graph,
     health as health_router,
@@ -67,3 +68,4 @@ app.include_router(snapshots.router)
 app.include_router(canvas.router)
 app.include_router(activity.router)
 app.include_router(ai.router)
+app.include_router(events.router)

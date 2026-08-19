@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bot, History, Key, ShieldCheck } from 'lucide-react'
 import { api } from '@/api/client'
 import { useVaultStore } from '@/store/vaultStore'
+import { useEventStore } from '@/store/eventStore'
 import type { AIAction, AIConfig } from '@/types'
 
 export function AITab() {
@@ -11,6 +12,7 @@ export function AITab() {
   const [saved, setSaved] = useState(false)
   const [actions, setActions] = useState<AIAction[]>([])
   const [showLog, setShowLog] = useState(false)
+  const aiActivityVersion = useEventStore((s) => s.aiActivityVersion)
 
   useEffect(() => {
     if (!vault) return
@@ -20,7 +22,11 @@ export function AITab() {
   useEffect(() => {
     if (!vault || !showLog) return
     api.listAIActions(vault.id).then(setActions)
-  }, [vault, showLog])
+    // aiActivityVersion ticks on every AI_ACTION_STARTED/COMPLETED SSE event
+    // (Part 55) so an open log stays live while the agent is working,
+    // instead of only reflecting whatever had already happened when it was
+    // first expanded.
+  }, [vault, showLog, aiActivityVersion])
 
   const saveKey = async () => {
     if (!vault || !apiKey.trim()) return

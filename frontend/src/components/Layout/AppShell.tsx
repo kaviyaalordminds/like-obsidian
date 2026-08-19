@@ -4,6 +4,7 @@ import { useVaultStore } from '@/store/vaultStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { useVaultEvents } from '@/hooks/useVaultEvents'
 import { FileExplorer } from '@/components/FileExplorer/FileExplorer'
 import { RightSidebar } from '@/components/Sidebar/RightSidebar'
 import { WorkspaceArea } from './WorkspaceArea'
@@ -52,6 +53,7 @@ export function AppShell() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
 
   useKeyboardShortcuts()
+  useVaultEvents(currentVault?.id)
 
   useEffect(() => {
     loadVaults()

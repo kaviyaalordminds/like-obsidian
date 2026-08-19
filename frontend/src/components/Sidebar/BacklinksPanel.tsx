@@ -3,6 +3,7 @@ import { Link2, Sparkles, Hash, Check, X, Waypoints } from 'lucide-react'
 import { api } from '@/api/client'
 import { useVaultStore } from '@/store/vaultStore'
 import { useNoteStore } from '@/store/noteStore'
+import { useEventStore } from '@/store/eventStore'
 import type { BacklinksResponse, GraphNode, LinkSuggestion, TagSuggestion } from '@/types'
 
 interface Props {
@@ -29,6 +30,11 @@ export function BacklinksPanel({ path, onOpenNote }: Props) {
   // instead of staying pinned to whatever the note looked like when this
   // panel first mounted.
   const savedAt = useNoteStore((s) => s.entries[path]?.note?.modified_at)
+  // Structural changes elsewhere (another tab, the AI agent) publish
+  // GRAPH_UPDATED over SSE and bump this — without it, a note that just
+  // gained a backlink from a change made outside this panel would only
+  // catch up the next time the user re-opened it.
+  const graphVersion = useEventStore((s) => s.graphVersion)
   const [data, setData] = useState<BacklinksResponse | null>(null)
   const [linkSuggestions, setLinkSuggestions] = useState<LinkSuggestion[]>([])
   const [tagSuggestions, setTagSuggestions] = useState<TagSuggestion[]>([])
@@ -45,7 +51,7 @@ export function BacklinksPanel({ path, onOpenNote }: Props) {
     api.localGraph(vault.id, path, 2).then((g) => {
       setRelated(g.nodes.filter((n) => n.type === 'note' && n.path && n.path !== path))
     })
-  }, [vault, path, savedAt])
+  }, [vault, path, savedAt, graphVersion])
 
   const applyEdit = (fn: (content: string) => string) => {
     if (!vault) return

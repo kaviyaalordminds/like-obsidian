@@ -24,6 +24,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useUIStore } from '@/store/uiStore'
 import { useGraphStore, type ColorStrategy, type GraphMode, type RelationKind } from '@/store/graphStore'
+import { useEventStore } from '@/store/eventStore'
 import { GraphView } from './GraphView'
 import { GraphHUD } from './GraphHUD'
 import { GraphMinimap } from './GraphMinimap'
@@ -91,6 +92,7 @@ export function GlobalGraphPage() {
   const [scanning, setScanning] = useState(false)
   const [cy, setCy] = useState<Core | null>(null)
   const [clusterOf, setClusterOf] = useState<Map<string, string> | null>(null)
+  const graphVersion = useEventStore((s) => s.graphVersion)
 
   useEffect(() => {
     if (!vault) return
@@ -101,7 +103,7 @@ export function GlobalGraphPage() {
         relations: [...gs.relationKinds],
       })
       .then(setRaw)
-  }, [vault, graphSettings.showUnresolved, graphSettings.showOrphans, gs.relationKinds, reloadKey])
+  }, [vault, graphSettings.showUnresolved, graphSettings.showOrphans, gs.relationKinds, reloadKey, graphVersion])
 
   useEffect(() => {
     if (!vault || gs.mode !== 'cluster') {
