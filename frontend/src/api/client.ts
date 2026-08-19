@@ -17,6 +17,7 @@ import type {
   HealthReport,
   Note,
   NoteFilterCriteria,
+  NoteSuggestions,
   OrphanNote,
   PluginInfo,
   RelatedTag,
@@ -147,6 +148,8 @@ export const api = {
     request<GraphData>(`/vaults/${vaultId}/graph/local/${encodeSegments(path)}?depth=${depth}`),
   backlinks: (vaultId: string, path: string) =>
     request<BacklinksResponse>(`/vaults/${vaultId}/backlinks/${encodeSegments(path)}`),
+  noteSuggestions: (vaultId: string, path: string) =>
+    request<NoteSuggestions>(`/vaults/${vaultId}/notes/${encodeSegments(path)}/suggestions`),
   graphStats: (vaultId: string, clusterStrategy: 'folder' | 'connected' = 'folder') =>
     request<GraphStats>(`/vaults/${vaultId}/graph/stats?cluster_strategy=${clusterStrategy}`),
   graphClusters: (vaultId: string, strategy: 'folder' | 'connected' = 'folder') =>

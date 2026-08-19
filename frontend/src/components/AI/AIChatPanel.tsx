@@ -99,12 +99,13 @@ export function AIChatPanel() {
     })
   }
 
-  const send = () => {
-    if (!vault || !input.trim() || ai.streaming) return
-    const text = input.trim()
+  const send = (override?: { text: string; kind: AIContextSelection['kind'] }) => {
+    const text = (override?.text ?? input).trim()
+    if (!vault || !text || ai.streaming) return
     setInput('')
     ai.addUserMessage(text)
-    const selection = contextKind ? buildSelection(contextKind, activePane?.activePath ?? null) : null
+    const kind = override?.kind ?? contextKind
+    const selection = kind ? buildSelection(kind, activePane?.activePath ?? null) : null
     consumeStream((onEvent, signal) => streamAIChat(vault.id, ai.conversationId, text, selection, onEvent, signal))
   }
 
@@ -139,9 +140,21 @@ export function AIChatPanel() {
 
       <div ref={scrollRef} className="flex-1 overflow-auto p-3 space-y-3">
         {ai.messages.length === 0 && (
-          <p className="text-xs text-[var(--color-text-faint)]">
-            Ask about your vault — "what's connected to RAG?", "find broken links", "create a note about X".
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-[var(--color-text-faint)]">
+              Ask about your vault — "what's connected to RAG?", "find broken links", "create a note about X".
+            </p>
+            <div className="flex flex-col gap-1">
+              <QuickPrompt
+                label="Explore this vault's main topics"
+                onClick={() => send({ text: 'What are the main topics, domains, and clusters in this vault? Use the graph and tag tools to ground your answer in real data.', kind: 'vault' })}
+              />
+              <QuickPrompt
+                label="Find knowledge gaps"
+                onClick={() => send({ text: 'Look for knowledge gaps: orphaned notes, weakly-connected topics, and broken links. Summarize what you find.', kind: 'vault' })}
+              />
+            </div>
+          </div>
         )}
         {ai.messages
           .filter((m) => m.text || m.toolCalls.length > 0)
@@ -200,7 +213,7 @@ export function AIChatPanel() {
             className="flex-1 settings-input text-sm"
           />
           <button
-            onClick={send}
+            onClick={() => send()}
             disabled={ai.streaming || !input.trim()}
             className="p-2 rounded-md text-white disabled:opacity-40"
             style={{ background: 'var(--color-accent)' }}
@@ -210,6 +223,18 @@ export function AIChatPanel() {
         </div>
       </div>
     </div>
+  )
+}
+
+function QuickPrompt({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left px-2.5 py-1.5 rounded-md border text-xs hover:border-[var(--color-accent)]"
+      style={{ borderColor: 'var(--color-border)' }}
+    >
+      {label}
+    </button>
   )
 }
 

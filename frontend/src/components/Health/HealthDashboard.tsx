@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Link2Off, Copy, Ghost, HeartPulse } from 'lucide-react'
+import { AlertTriangle, Link2Off, Copy, Ghost, HeartPulse, X, Columns2 } from 'lucide-react'
 import { api } from '@/api/client'
 import { useVaultStore } from '@/store/vaultStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useUIStore } from '@/store/uiStore'
-import type { BrokenLinkGroup, DuplicateCandidate, HealthReport, OrphanNote } from '@/types'
+import type { BrokenLinkGroup, DuplicateCandidate, HealthReport, Note, OrphanNote } from '@/types'
 
 type Tab = 'overview' | 'orphans' | 'broken' | 'duplicates'
 
@@ -17,6 +17,9 @@ export function HealthDashboard() {
   const [orphans, setOrphans] = useState<OrphanNote[]>([])
   const [broken, setBroken] = useState<BrokenLinkGroup[]>([])
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([])
+  const [ignoredDuplicates, setIgnoredDuplicates] = useState<Set<string>>(new Set())
+  const [comparing, setComparing] = useState<DuplicateCandidate | null>(null)
+  const [compareNotes, setCompareNotes] = useState<[Note, Note] | null>(null)
 
   const load = () => {
     if (!vault) return
@@ -28,10 +31,31 @@ export function HealthDashboard() {
 
   useEffect(load, [vault])
 
+  useEffect(() => {
+    if (!comparing) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setComparing(null)
+        setCompareNotes(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [comparing])
+
   const open = (path: string) => {
     openNote(path)
     setMainView('editor')
   }
+
+  const compare = async (d: DuplicateCandidate) => {
+    if (!vault) return
+    setComparing(d)
+    const [a, b] = await Promise.all([api.getNote(vault.id, d.a.path), api.getNote(vault.id, d.b.path)])
+    setCompareNotes([a, b])
+  }
+
+  const dupKey = (d: DuplicateCandidate) => `${d.a.path}::${d.b.path}`
 
   const createFromBroken = async (target: string) => {
     if (!vault) return
@@ -158,21 +182,67 @@ export function HealthDashboard() {
 
       {tab === 'duplicates' && (
         <div className="space-y-2">
-          {duplicates.length === 0 && <Empty icon={Copy} text="No likely duplicates detected." />}
-          {duplicates.map((d, i) => (
-            <div key={i} className="flex items-center justify-between p-3 rounded-md border text-sm" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="flex items-center gap-2">
-                <button onClick={() => open(d.a.path)} className="hover:text-[var(--color-accent)]">
-                  {d.a.title}
-                </button>
-                <span className="text-[var(--color-text-faint)]">↔</span>
-                <button onClick={() => open(d.b.path)} className="hover:text-[var(--color-accent)]">
-                  {d.b.title}
-                </button>
+          {duplicates.filter((d) => !ignoredDuplicates.has(dupKey(d))).length === 0 && (
+            <Empty icon={Copy} text="No likely duplicates detected." />
+          )}
+          {duplicates
+            .filter((d) => !ignoredDuplicates.has(dupKey(d)))
+            .map((d, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-md border text-sm" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => open(d.a.path)} className="hover:text-[var(--color-accent)]">
+                    {d.a.title}
+                  </button>
+                  <span className="text-[var(--color-text-faint)]">↔</span>
+                  <button onClick={() => open(d.b.path)} className="hover:text-[var(--color-accent)]">
+                    {d.b.title}
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--color-text-faint)]">{Math.round(d.similarity * 100)}% similar</span>
+                  <button onClick={() => compare(d)} className="text-xs flex items-center gap-1 text-[var(--color-accent)]">
+                    <Columns2 size={12} /> Compare
+                  </button>
+                  <button
+                    onClick={() => setIgnoredDuplicates((prev) => new Set([...prev, dupKey(d)]))}
+                    className="text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+                  >
+                    Ignore
+                  </button>
+                </div>
               </div>
-              <span className="text-xs text-[var(--color-text-faint)]">{Math.round(d.similarity * 100)}% similar</span>
+            ))}
+        </div>
+      )}
+
+      {comparing && compareNotes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => { setComparing(null); setCompareNotes(null) }}>
+          <div className="fixed inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-3xl max-h-[80vh] rounded-xl border flex flex-col overflow-hidden"
+            style={{ background: 'var(--color-bg-elevated)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-glow)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              <h3 className="text-sm font-semibold">Compare notes — {Math.round(comparing.similarity * 100)}% similar</h3>
+              <button onClick={() => { setComparing(null); setCompareNotes(null) }} className="p-1 rounded hover:bg-[var(--color-bg-inset)]">
+                <X size={14} />
+              </button>
             </div>
-          ))}
+            <div className="flex-1 grid grid-cols-2 divide-x overflow-auto" style={{ borderColor: 'var(--color-border)' }}>
+              {compareNotes.map((n) => (
+                <div key={n.path} className="p-4">
+                  <button onClick={() => open(n.path)} className="text-sm font-semibold mb-2 hover:text-[var(--color-accent)]">
+                    {n.title}
+                  </button>
+                  <pre className="text-xs whitespace-pre-wrap font-mono text-[var(--color-text-muted)]">{n.content}</pre>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-2 border-t text-xs text-[var(--color-text-faint)]" style={{ borderColor: 'var(--color-border)' }}>
+              Nothing merges automatically — open either note above and combine them yourself.
+            </div>
+          </div>
         </div>
       )}
     </div>

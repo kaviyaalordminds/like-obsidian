@@ -172,3 +172,23 @@ def test_graph_command_tools_return_structured_commands_without_touching_vault()
     assert TOOLS_BY_NAME["graph_set_mode"].handler(ctx, {"mode": "radial"}) == {"command": "set_mode", "mode": "radial"}
     assert "error" in TOOLS_BY_NAME["graph_set_mode"].handler(ctx, {"mode": "not-a-mode"})
     assert TOOLS_BY_NAME["graph_highlight_nodes"].safety == "read"
+
+
+def test_note_suggestions_route_does_not_collide_with_get_note():
+    resp = client.post("/api/vaults", json={"name": "Suggestions Route Vault"})
+    vault_id = resp.json()["id"]
+    client.post(f"/api/vaults/{vault_id}/open")
+    client.post(f"/api/vaults/{vault_id}/notes", json={"path": "RAG.md", "content": "#research RAG basics"})
+    client.post(f"/api/vaults/{vault_id}/notes", json={"path": "Draft.md", "content": "About RAG and research."})
+
+    resp = client.get(f"/api/vaults/{vault_id}/notes/Draft.md/suggestions")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert any(s["target_path"] == "RAG.md" for s in body["links"])
+    assert any(s["tag"] == "research" for s in body["tags"])
+
+    # The plain note-read route must still work for a path that happens to
+    # share a prefix with the suggestions route.
+    resp = client.get(f"/api/vaults/{vault_id}/notes/Draft.md")
+    assert resp.status_code == 200
+    assert resp.json()["path"] == "Draft.md"

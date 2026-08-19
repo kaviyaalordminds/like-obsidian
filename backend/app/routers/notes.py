@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from app.deps import get_vault, vault_root
-from app.services import vault_service
+from app.services import suggestion_service, vault_service
 from app.services.index_service import get_index
 from app.services.markdown_parser import parse_note
 from app.services.rename_service import apply_link_updates, plan_link_updates
@@ -37,6 +37,26 @@ def _note_out(root, rel_path: str) -> schemas.NoteOut:
         links=[{"target": l.target, "alias": l.alias, "raw": l.raw} for l in parsed.links],
         modified_at=stat.st_mtime,
     )
+
+
+# Registered before the greedy `/{path:path}` route below: FastAPI matches
+# routes in declaration order, and `{path:path}` matches everything
+# (including a trailing "/suggestions" segment) — declaring the specific
+# route second meant every request for it 404'd against get_note() instead,
+# trying to read a note literally named "X.md/suggestions".
+@router.get("/{path:path}/suggestions")
+def note_suggestions(path: str, vault: models.Vault = Depends(get_vault)):
+    """Heuristic, non-AI link/tag suggestions for the note being edited
+    (Part 34/35) — matches existing note titles and existing vault tags
+    against this note's own text. Nothing is auto-applied; the caller
+    accepts or ignores each suggestion explicitly."""
+    index = get_index(vault_root(vault))
+    links = suggestion_service.suggest_links(index, path)
+    tags = suggestion_service.suggest_tags(index, path)
+    return {
+        "links": [{"title": s.title, "target_path": s.target_path, "mention": s.mention} for s in links],
+        "tags": [{"tag": s.tag, "mention": s.mention} for s in tags],
+    }
 
 
 @router.get("/{path:path}", response_model=schemas.NoteOut)

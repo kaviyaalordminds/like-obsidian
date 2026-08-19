@@ -75,6 +75,22 @@ export interface BacklinksResponse {
   unlinked_mentions: { path: string; title: string }[]
 }
 
+export interface LinkSuggestion {
+  title: string
+  target_path: string
+  mention: string
+}
+
+export interface TagSuggestion {
+  tag: string
+  mention: string
+}
+
+export interface NoteSuggestions {
+  links: LinkSuggestion[]
+  tags: TagSuggestion[]
+}
+
 export interface SearchResult {
   path: string
   title: string
