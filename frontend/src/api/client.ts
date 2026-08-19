@@ -128,13 +128,14 @@ export const api = {
   // Graph
   globalGraph: (
     vaultId: string,
-    opts?: { includeUnresolved?: boolean; includeOrphans?: boolean; tags?: string[]; folder?: string },
+    opts?: { includeUnresolved?: boolean; includeOrphans?: boolean; tags?: string[]; folder?: string; relations?: string[] },
   ) => {
     const params = new URLSearchParams()
     if (opts?.includeUnresolved !== undefined) params.set('include_unresolved', String(opts.includeUnresolved))
     if (opts?.includeOrphans !== undefined) params.set('include_orphans', String(opts.includeOrphans))
     if (opts?.folder) params.set('folder', opts.folder)
     opts?.tags?.forEach((t) => params.append('tag', t))
+    opts?.relations?.forEach((r) => params.append('relations', r))
     const qs = params.toString()
     return request<GraphData>(`/vaults/${vaultId}/graph${qs ? `?${qs}` : ''}`)
   },

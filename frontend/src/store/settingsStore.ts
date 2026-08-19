@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
+import type { GraphTheme } from '@/lib/graphThemes'
 
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -11,6 +12,8 @@ export interface EditorSettings {
   lineNumbers: boolean
 }
 
+export type GraphPerformanceMode = 'auto' | 'low' | 'balanced' | 'high' | 'quality'
+
 export interface GraphSettings {
   nodeSize: number
   linkDistance: number
@@ -20,6 +23,7 @@ export interface GraphSettings {
   depth: number
   showOrphans: boolean
   showUnresolved: boolean
+  performanceMode: GraphPerformanceMode
 }
 
 export interface DailyNoteSettings {
@@ -42,6 +46,7 @@ interface SettingsState {
   graph: GraphSettings
   dailyNotes: DailyNoteSettings
   effects: EffectsSettings
+  customGraphThemes: GraphTheme[]
   loaded: boolean
 
   setTheme: (theme: Theme) => void
@@ -49,6 +54,9 @@ interface SettingsState {
   updateGraph: (patch: Partial<GraphSettings>) => void
   updateDailyNotes: (patch: Partial<DailyNoteSettings>) => void
   updateEffects: (patch: Partial<EffectsSettings>) => void
+  addCustomGraphTheme: (theme: GraphTheme) => void
+  updateCustomGraphTheme: (id: string, patch: Partial<GraphTheme>) => void
+  deleteCustomGraphTheme: (id: string) => void
   loadFromVault: (vaultId: string) => Promise<void>
   persist: (vaultId: string) => void
 }
@@ -67,9 +75,11 @@ const defaults = {
     depth: 1,
     showOrphans: true,
     showUnresolved: true,
+    performanceMode: 'auto',
   } as GraphSettings,
   dailyNotes: { folder: 'Daily Notes', dateFormat: '%Y-%m-%d', templatePath: '' } as DailyNoteSettings,
   effects: { enabled: true, showGrid: true, showGlow: true, showHud: true, reducedMotion: false } as EffectsSettings,
+  customGraphThemes: [] as GraphTheme[],
 }
 
 function loadLocal() {
@@ -83,6 +93,7 @@ function loadLocal() {
       graph: { ...defaults.graph, ...parsed.graph },
       dailyNotes: { ...defaults.dailyNotes, ...parsed.dailyNotes },
       effects: { ...defaults.effects, ...parsed.effects },
+      customGraphThemes: Array.isArray(parsed.customGraphThemes) ? parsed.customGraphThemes : defaults.customGraphThemes,
     }
   } catch {
     return defaults
@@ -137,6 +148,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       })
       saveLocal(get())
     },
+    addCustomGraphTheme: (theme) => {
+      set((s) => ({ customGraphThemes: [...s.customGraphThemes, theme] }))
+      saveLocal(get())
+    },
+    updateCustomGraphTheme: (id, patch) => {
+      set((s) => ({
+        customGraphThemes: s.customGraphThemes.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      }))
+      saveLocal(get())
+    },
+    deleteCustomGraphTheme: (id) => {
+      set((s) => ({ customGraphThemes: s.customGraphThemes.filter((t) => t.id !== id) }))
+      saveLocal(get())
+    },
 
     loadFromVault: async (vaultId: string) => {
       try {
@@ -148,6 +173,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
             graph: { ...get().graph, ...(res.data.graph as object) },
             dailyNotes: { ...get().dailyNotes, ...(res.data.dailyNotes as object) },
             effects: { ...get().effects, ...(res.data.effects as object) },
+            customGraphThemes: Array.isArray(res.data.customGraphThemes)
+              ? (res.data.customGraphThemes as GraphTheme[])
+              : get().customGraphThemes,
           }
           applyThemeToDom(merged.theme)
           applyEffectsToDom(merged.effects)
@@ -171,6 +199,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
           graph: s.graph,
           dailyNotes: s.dailyNotes,
           effects: s.effects,
+          customGraphThemes: s.customGraphThemes,
         })
       }, 500)
     },
@@ -180,6 +209,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
 function saveLocal(s: SettingsState) {
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ theme: s.theme, editor: s.editor, graph: s.graph, dailyNotes: s.dailyNotes, effects: s.effects }),
+    JSON.stringify({
+      theme: s.theme,
+      editor: s.editor,
+      graph: s.graph,
+      dailyNotes: s.dailyNotes,
+      effects: s.effects,
+      customGraphThemes: s.customGraphThemes,
+    }),
   )
 }

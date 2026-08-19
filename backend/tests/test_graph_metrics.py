@@ -89,3 +89,39 @@ def test_shortest_path_same_node(tmp_vault):
     graph = graph_service.build_graph(idx, include_unresolved=False, include_orphans=True)
     path = graph_metrics_service.shortest_path(graph, "A.md", "A.md")
     assert [n.id for n in path] == ["A.md"]
+
+
+def test_node_metadata_includes_word_count_and_status(tmp_vault):
+    write(tmp_vault, "A.md", "---\nstatus: draft\n---\none two three four five")
+    idx = _index(tmp_vault)
+    graph = graph_service.build_graph(idx, include_unresolved=False)
+    node = next(n for n in graph.nodes if n.id == "A.md")
+
+    assert node.word_count == 5
+    assert node.status == "draft"
+    assert node.created_at is not None
+
+
+def test_relation_edges_tag_and_folder(tmp_vault):
+    write(tmp_vault, "Folder/A.md", "#shared")
+    write(tmp_vault, "Folder/B.md", "#shared")
+    write(tmp_vault, "Other/C.md", "no tag")
+    idx = _index(tmp_vault)
+    graph = graph_service.build_graph(idx, include_unresolved=False)
+
+    tag_edges = graph_service.relation_edges(graph, {"tag-relation"})
+    assert any(e.type == "tag-relation" for e in tag_edges)
+    assert {e.source for e in tag_edges} | {e.target for e in tag_edges} == {"Folder/A.md", "Folder/B.md"}
+
+    folder_edges = graph_service.relation_edges(graph, {"folder-relation"})
+    assert any(e.type == "folder-relation" for e in folder_edges)
+
+
+def test_relation_edges_skips_oversized_groups(tmp_vault):
+    for i in range(5):
+        write(tmp_vault, f"N{i}.md", "#big")
+    idx = _index(tmp_vault)
+    graph = graph_service.build_graph(idx, include_unresolved=False)
+
+    edges = graph_service.relation_edges(graph, {"tag-relation"}, max_group_size=3)
+    assert edges == []

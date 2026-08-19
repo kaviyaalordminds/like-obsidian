@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { computeDegrees, computeDistances, computeIsolatedFilteredData, degreeToRadius } from '@/lib/graph'
+import {
+  computeDegrees,
+  computeDistances,
+  computeIsolatedFilteredData,
+  degreeToRadius,
+  hashColor,
+  lerpColor,
+  resolvePerformanceMode,
+} from '@/lib/graph'
 import type { GraphData } from '@/types'
 
-const node = (id: string) => ({ id, path: `${id}.md`, title: id, type: 'note' as const, tags: [], folder: '', updated_at: null })
+const node = (id: string) => ({
+  id,
+  path: `${id}.md`,
+  title: id,
+  type: 'note' as const,
+  tags: [],
+  folder: '',
+  created_at: null,
+  updated_at: null,
+  word_count: 0,
+  status: null,
+})
 
 const data: GraphData = {
   nodes: [node('A'), node('B'), node('Orphan')],
@@ -41,6 +60,41 @@ describe('degreeToRadius', () => {
     expect(r1).toBeLessThan(r10)
     expect(r10).toBeLessThan(rAtCap)
     expect(rAtCap).toBe(rBeyondCap) // both clamp to the same max scale
+  })
+})
+
+describe('hashColor', () => {
+  it('is deterministic for the same key', () => {
+    expect(hashColor('Research')).toBe(hashColor('Research'))
+  })
+
+  it('picks from the given palette', () => {
+    const palette = ['#111111', '#222222']
+    expect(palette).toContain(hashColor('anything', palette))
+  })
+})
+
+describe('lerpColor', () => {
+  it('returns the start color at t=0 and end color at t=1', () => {
+    expect(lerpColor('#000000', '#ffffff', 0)).toBe('#000000')
+    expect(lerpColor('#000000', '#ffffff', 1)).toBe('#ffffff')
+  })
+
+  it('clamps out-of-range t', () => {
+    expect(lerpColor('#000000', '#ffffff', -5)).toBe('#000000')
+    expect(lerpColor('#000000', '#ffffff', 5)).toBe('#ffffff')
+  })
+})
+
+describe('resolvePerformanceMode', () => {
+  it('passes through an explicit (non-auto) tier regardless of size', () => {
+    expect(resolvePerformanceMode('quality', 5000)).toBe('quality')
+  })
+
+  it('auto recommends lower tiers as node count grows', () => {
+    expect(resolvePerformanceMode('auto', 10)).toBe('quality')
+    expect(resolvePerformanceMode('auto', 500)).toBe('balanced')
+    expect(resolvePerformanceMode('auto', 5000)).toBe('low')
   })
 })
 

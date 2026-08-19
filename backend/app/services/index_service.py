@@ -21,6 +21,11 @@ class IndexedNote:
     path: str
     mtime: float
     parsed: ParsedNote
+    # Best-effort "created" signal: st_birthtime where the OS provides true
+    # creation time (macOS/BSD), otherwise st_ctime (Linux metadata-change
+    # time — not true creation time, but the closest available proxy without
+    # a database column duplicating filesystem state).
+    ctime: float = 0.0
 
 
 class IndexService:
@@ -48,7 +53,8 @@ class IndexService:
                     continue
                 fallback_title = Path(rel_path).stem
                 parsed = parse_note(raw, fallback_title)
-                self._notes[rel_path] = IndexedNote(rel_path, stat.st_mtime, parsed)
+                ctime = getattr(stat, "st_birthtime", stat.st_ctime)
+                self._notes[rel_path] = IndexedNote(rel_path, stat.st_mtime, parsed, ctime)
 
             for stale in set(self._notes) - seen:
                 del self._notes[stale]
@@ -74,7 +80,8 @@ class IndexService:
                 return
             fallback_title = Path(rel_path).stem
             parsed = parse_note(raw, fallback_title)
-            self._notes[rel_path] = IndexedNote(rel_path, stat.st_mtime, parsed)
+            ctime = getattr(stat, "st_birthtime", stat.st_ctime)
+            self._notes[rel_path] = IndexedNote(rel_path, stat.st_mtime, parsed, ctime)
             self._loaded = True
 
     def all_notes(self) -> dict[str, IndexedNote]:

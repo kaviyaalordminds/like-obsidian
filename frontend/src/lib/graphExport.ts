@@ -22,6 +22,25 @@ export function exportGraphJson(data: GraphData, filename = 'graph.json') {
   download(blob, filename)
 }
 
+function csvCell(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+export function exportGraphCsv(data: GraphData, filename = 'graph.csv') {
+  const nodeRows = ['type,id,title,path,folder,tags,node_type']
+  data.nodes.forEach((n) => {
+    nodeRows.push(
+      ['node', n.id, n.title, n.path ?? '', n.folder, n.tags.join('|'), n.type].map(csvCell).join(','),
+    )
+  })
+  const edgeRows = ['type,source,target,relation']
+  data.edges.forEach((e) => {
+    edgeRows.push(['edge', e.source, e.target, e.type].map(csvCell).join(','))
+  })
+  const csv = [...nodeRows, '', ...edgeRows].join('\n')
+  download(new Blob([csv], { type: 'text/csv' }), filename)
+}
+
 /** Best-effort SVG export: serializes current node positions/edges from the
  * live Cytoscape model into plain SVG circles/lines. Cytoscape core has no
  * native SVG renderer without an extra plugin, so this reimplements just

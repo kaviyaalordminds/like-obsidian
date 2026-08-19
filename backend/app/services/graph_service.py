@@ -24,6 +24,8 @@ class GraphNode:
     folder: str = ""
     created_at: float | None = None
     updated_at: float | None = None
+    word_count: int = 0
+    status: str | None = None
 
 
 @dataclass
@@ -59,6 +61,7 @@ def build_graph(
 
     for path, indexed in notes.items():
         parsed = indexed.parsed
+        status = parsed.frontmatter.get("status") if isinstance(parsed.frontmatter, dict) else None
         nodes[path] = GraphNode(
             id=path,
             path=path,
@@ -66,7 +69,10 @@ def build_graph(
             type="note",
             tags=parsed.tags,
             folder=_folder_of(path),
+            created_at=indexed.ctime or None,
             updated_at=indexed.mtime,
+            word_count=len(parsed.body.split()),
+            status=str(status) if status else None,
         )
 
     for path, indexed in notes.items():
@@ -103,6 +109,48 @@ def build_graph(
     result_edges = [e for e in edges if e.source in kept_ids and e.target in kept_ids]
 
     return Graph(nodes=result_nodes, edges=result_edges)
+
+
+def relation_edges(
+    graph: Graph,
+    kinds: set[str],
+    *,
+    max_group_size: int = 40,
+) -> list[GraphEdge]:
+    """Compute extra, opt-in relationship edges layered on top of the base
+    wikilink graph (Part 8/PART9): notes sharing a tag ("tag-relation") or
+    living in the same folder ("folder-relation"). Groups larger than
+    `max_group_size` are skipped — an all-pairs edge set for a 500-note tag
+    would be ~125k edges, which helps no one and would choke rendering, so
+    those groups are reported as skipped rather than silently truncated."""
+    edges: list[GraphEdge] = []
+    notes = [n for n in graph.nodes if n.type == "note"]
+
+    if "tag-relation" in kinds:
+        by_tag: dict[str, list[str]] = {}
+        for n in notes:
+            for tag in n.tags:
+                by_tag.setdefault(tag, []).append(n.id)
+        for members in by_tag.values():
+            if len(members) < 2 or len(members) > max_group_size:
+                continue
+            for i in range(len(members)):
+                for j in range(i + 1, len(members)):
+                    edges.append(GraphEdge(source=members[i], target=members[j], type="tag-relation"))
+
+    if "folder-relation" in kinds:
+        by_folder: dict[str, list[str]] = {}
+        for n in notes:
+            if n.folder:
+                by_folder.setdefault(n.folder, []).append(n.id)
+        for members in by_folder.values():
+            if len(members) < 2 or len(members) > max_group_size:
+                continue
+            for i in range(len(members)):
+                for j in range(i + 1, len(members)):
+                    edges.append(GraphEdge(source=members[i], target=members[j], type="folder-relation"))
+
+    return edges
 
 
 def build_local_graph(index: IndexService, root_path: str, depth: int = 1) -> Graph:

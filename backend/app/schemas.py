@@ -71,7 +71,10 @@ class GraphNodeOut(BaseModel):
     type: str
     tags: list[str]
     folder: str
+    created_at: float | None = None
     updated_at: float | None = None
+    word_count: int = 0
+    status: str | None = None
 
 
 class GraphEdgeOut(BaseModel):

@@ -1,12 +1,39 @@
 import { create } from 'zustand'
 import type { GraphSnapshotState, NoteFilterCriteria } from '@/types'
 
-export type GraphMode = 'classic' | 'neural' | 'radial' | 'cinematic'
+export type GraphMode =
+  | 'classic'
+  | 'neural'
+  | 'radial'
+  | 'cinematic'
+  | 'tree'
+  | 'hierarchical'
+  | 'cluster'
+  | 'constellation'
+  | 'circular'
+  | 'timeline'
+  | 'dag'
 export type ClusterStrategy = 'folder' | 'connected'
+export type ColorStrategy =
+  | 'default'
+  | 'folder'
+  | 'tag'
+  | 'cluster'
+  | 'linkCount'
+  | 'backlinkCount'
+  | 'created'
+  | 'modified'
+  | 'fileType'
+  | 'status'
+export type RelationKind = 'tag-relation' | 'folder-relation'
 
 interface GraphState {
   mode: GraphMode
   clusterStrategy: ClusterStrategy
+  colorStrategy: ColorStrategy
+  relationKinds: Set<RelationKind>
+  collapsedClusters: Set<string>
+  themeId: string
   filters: NoteFilterCriteria
   query: string
   selectedNodeId: string | null
@@ -20,10 +47,14 @@ interface GraphState {
   showFilterPanel: boolean
   showInspector: boolean
   presentationMode: boolean
-  openPanel: 'path' | 'snapshot' | null
+  openPanel: 'path' | 'snapshot' | 'theme' | 'core' | null
 
   setMode: (mode: GraphMode) => void
   setClusterStrategy: (s: ClusterStrategy) => void
+  setColorStrategy: (s: ColorStrategy) => void
+  toggleRelationKind: (k: RelationKind) => void
+  toggleClusterCollapsed: (clusterId: string) => void
+  setThemeId: (id: string) => void
   setFilters: (patch: Partial<NoteFilterCriteria>) => void
   clearFilters: () => void
   setQuery: (q: string) => void
@@ -40,7 +71,7 @@ interface GraphState {
   toggleMinimap: () => void
   toggleFilterPanel: () => void
   togglePresentation: () => void
-  setOpenPanel: (panel: 'path' | 'snapshot' | null) => void
+  setOpenPanel: (panel: 'path' | 'snapshot' | 'theme' | 'core' | null) => void
   toSnapshotState: () => GraphSnapshotState
   loadSnapshotState: (state: GraphSnapshotState) => void
   resetView: () => void
@@ -49,6 +80,10 @@ interface GraphState {
 export const useGraphStore = create<GraphState>((set, get) => ({
   mode: 'classic',
   clusterStrategy: 'folder',
+  colorStrategy: 'default',
+  relationKinds: new Set(),
+  collapsedClusters: new Set(),
+  themeId: 'obsidian-classic',
   filters: {},
   query: '',
   selectedNodeId: null,
@@ -66,6 +101,22 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   setMode: (mode) => set({ mode }),
   setClusterStrategy: (clusterStrategy) => set({ clusterStrategy }),
+  setColorStrategy: (colorStrategy) => set({ colorStrategy }),
+  toggleRelationKind: (k) =>
+    set((s) => {
+      const next = new Set(s.relationKinds)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return { relationKinds: next }
+    }),
+  toggleClusterCollapsed: (clusterId) =>
+    set((s) => {
+      const next = new Set(s.collapsedClusters)
+      if (next.has(clusterId)) next.delete(clusterId)
+      else next.add(clusterId)
+      return { collapsedClusters: next }
+    }),
+  setThemeId: (themeId) => set({ themeId }),
   setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
   clearFilters: () => set({ filters: {} }),
   setQuery: (query) => set({ query }),
@@ -125,6 +176,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     const s = get()
     return {
       mode: s.mode,
+      colorStrategy: s.colorStrategy,
+      themeId: s.themeId,
+      relationKinds: [...s.relationKinds],
       filters: s.filters,
       query: s.query,
       selectedNodeId: s.selectedNodeId,
@@ -136,6 +190,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   loadSnapshotState: (state) => {
     set({
       mode: (state.mode as GraphMode) ?? 'classic',
+      colorStrategy: (state.colorStrategy as ColorStrategy) ?? 'default',
+      themeId: state.themeId ?? 'obsidian-classic',
+      relationKinds: new Set((state.relationKinds ?? []) as RelationKind[]),
       filters: state.filters ?? {},
       query: state.query ?? '',
       selectedNodeId: state.selectedNodeId ?? null,

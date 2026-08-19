@@ -15,23 +15,29 @@ import {
   ChevronRight,
   ScanLine,
   Eye,
+  Palette,
+  Layers,
 } from 'lucide-react'
 import { api } from '@/api/client'
 import { useVaultStore } from '@/store/vaultStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useUIStore } from '@/store/uiStore'
-import { useGraphStore, type GraphMode } from '@/store/graphStore'
+import { useGraphStore, type ColorStrategy, type GraphMode, type RelationKind } from '@/store/graphStore'
 import { GraphView } from './GraphView'
 import { GraphHUD } from './GraphHUD'
 import { GraphMinimap } from './GraphMinimap'
 import { GraphFilterPanel } from './GraphFilterPanel'
+import { GraphThemePanel } from './GraphThemePanel'
+import { KnowledgeCorePanel } from './KnowledgeCorePanel'
 import { KnowledgeInspector } from './KnowledgeInspector'
 import { KnowledgePathPanel } from './KnowledgePathPanel'
 import { SnapshotPanel } from './SnapshotPanel'
 import { ContextMenu, type MenuItem } from '@/components/FileExplorer/ContextMenu'
-import { computeIsolatedFilteredData } from '@/lib/graph'
-import { exportGraphJson, exportGraphPng, exportGraphSvg } from '@/lib/graphExport'
+import { computeIsolatedFilteredData, resolvePerformanceMode } from '@/lib/graph'
+import type { GraphPerformanceMode } from '@/store/settingsStore'
+import { exportGraphCsv, exportGraphJson, exportGraphPng, exportGraphSvg } from '@/lib/graphExport'
+import { getGraphTheme } from '@/lib/graphThemes'
 import type { GraphData, GraphNode } from '@/types'
 
 const MODES: { id: GraphMode; label: string }[] = [
@@ -39,6 +45,26 @@ const MODES: { id: GraphMode; label: string }[] = [
   { id: 'neural', label: 'Neural' },
   { id: 'radial', label: 'Radial' },
   { id: 'cinematic', label: 'Cinematic' },
+  { id: 'tree', label: 'Tree' },
+  { id: 'hierarchical', label: 'Hierarchical' },
+  { id: 'cluster', label: 'Cluster' },
+  { id: 'constellation', label: 'Constellation' },
+  { id: 'circular', label: 'Circular' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'dag', label: 'DAG' },
+]
+
+const COLOR_STRATEGIES: { id: ColorStrategy; label: string }[] = [
+  { id: 'default', label: 'Default' },
+  { id: 'folder', label: 'Folder' },
+  { id: 'tag', label: 'Tag' },
+  { id: 'cluster', label: 'Cluster' },
+  { id: 'linkCount', label: 'Link count' },
+  { id: 'backlinkCount', label: 'Backlink count' },
+  { id: 'created', label: 'Created date' },
+  { id: 'modified', label: 'Modified date' },
+  { id: 'fileType', label: 'File type' },
+  { id: 'status', label: 'Status' },
 ]
 
 export function GlobalGraphPage() {
@@ -51,6 +77,8 @@ export function GlobalGraphPage() {
   const activePane = useWorkspaceStore((s) => s.panes.find((p) => p.id === s.activePaneId))
 
   const gs = useGraphStore()
+  const customThemes = useSettingsStore((s) => s.customGraphThemes)
+  const theme = getGraphTheme(gs.themeId, customThemes)
 
   const [raw, setRaw] = useState<GraphData>({ nodes: [], edges: [] })
   const [filteredPaths, setFilteredPaths] = useState<Set<string> | null>(null)
@@ -62,13 +90,30 @@ export function GlobalGraphPage() {
   const [exportOpen, setExportOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [cy, setCy] = useState<Core | null>(null)
+  const [clusterOf, setClusterOf] = useState<Map<string, string> | null>(null)
 
   useEffect(() => {
     if (!vault) return
     api
-      .globalGraph(vault.id, { includeUnresolved: graphSettings.showUnresolved, includeOrphans: graphSettings.showOrphans })
+      .globalGraph(vault.id, {
+        includeUnresolved: graphSettings.showUnresolved,
+        includeOrphans: graphSettings.showOrphans,
+        relations: [...gs.relationKinds],
+      })
       .then(setRaw)
-  }, [vault, graphSettings.showUnresolved, graphSettings.showOrphans, reloadKey])
+  }, [vault, graphSettings.showUnresolved, graphSettings.showOrphans, gs.relationKinds, reloadKey])
+
+  useEffect(() => {
+    if (!vault || gs.mode !== 'cluster') {
+      setClusterOf(null)
+      return
+    }
+    api.graphClusters(vault.id, gs.clusterStrategy).then((clusters) => {
+      const map = new Map<string, string>()
+      clusters.forEach((c) => c.node_ids.forEach((id) => map.set(id, c.id)))
+      setClusterOf(map)
+    })
+  }, [vault, gs.mode, gs.clusterStrategy, reloadKey])
 
   // Re-evaluate the filter panel's criteria against the live vault whenever
   // it changes, rather than filtering client-side against stale fields the
@@ -169,6 +214,11 @@ export function GlobalGraphPage() {
         <GraphView
           data={filtered}
           mode={gs.mode}
+          theme={theme}
+          colorStrategy={gs.colorStrategy}
+          clusterOf={clusterOf ?? undefined}
+          collapsedClusters={gs.collapsedClusters}
+          onToggleCluster={gs.toggleClusterCollapsed}
           focusPath={focusPath}
           selectedNodeId={gs.selectedNodeId}
           pinnedIds={gs.pinnedNodeIds}
@@ -228,12 +278,15 @@ export function GlobalGraphPage() {
         {/* Top-center, second row: mode switcher (own row so it can never
             overlap the left toolbar regardless of how many buttons are
             visible there). */}
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 flex items-center rounded-lg glass-panel overflow-hidden" style={{ boxShadow: 'var(--shadow-glow)' }}>
+        <div
+          className="absolute top-16 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-0.5 rounded-lg glass-panel p-1 max-w-[92vw]"
+          style={{ boxShadow: 'var(--shadow-glow)' }}
+        >
           {MODES.map((m) => (
             <button
               key={m.id}
               onClick={() => gs.setMode(m.id)}
-              className="px-3 py-1.5 text-xs font-medium"
+              className="px-3 py-1.5 rounded text-xs font-medium"
               style={{
                 background: gs.mode === m.id ? 'var(--color-accent-soft)' : 'transparent',
                 color: gs.mode === m.id ? 'var(--color-accent)' : 'var(--color-text-muted)',
@@ -246,6 +299,12 @@ export function GlobalGraphPage() {
 
         {/* Top-right: panel toggles */}
         <div className="absolute top-3 right-3 flex items-center gap-2">
+          <ToolButton title="Graph theme" active={gs.openPanel === 'theme'} onClick={() => gs.setOpenPanel('theme')}>
+            <Palette size={14} />
+          </ToolButton>
+          <ToolButton title="Knowledge core" active={gs.openPanel === 'core'} onClick={() => gs.setOpenPanel('core')}>
+            <Layers size={14} />
+          </ToolButton>
           <ToolButton title="Filters" active={gs.showFilterPanel} onClick={gs.toggleFilterPanel}>
             <SlidersHorizontal size={14} />
           </ToolButton>
@@ -261,7 +320,7 @@ export function GlobalGraphPage() {
             </ToolButton>
             {exportOpen && (
               <div className="absolute right-0 mt-1 glass-panel rounded-lg overflow-hidden text-xs w-32" style={{ boxShadow: 'var(--shadow-glow)' }}>
-                {(['PNG', 'SVG', 'JSON'] as const).map((fmt) => (
+                {(['PNG', 'SVG', 'JSON', 'CSV'] as const).map((fmt) => (
                   <button
                     key={fmt}
                     onClick={() => {
@@ -269,6 +328,7 @@ export function GlobalGraphPage() {
                       if (fmt === 'PNG') exportGraphPng(cy, `${vault.slug}-graph.png`)
                       if (fmt === 'SVG') exportGraphSvg(cy, `${vault.slug}-graph.svg`)
                       if (fmt === 'JSON') exportGraphJson(filtered, `${vault.slug}-graph.json`)
+                      if (fmt === 'CSV') exportGraphCsv(filtered, `${vault.slug}-graph.csv`)
                       setExportOpen(false)
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-[var(--color-bg-inset)]"
@@ -291,6 +351,15 @@ export function GlobalGraphPage() {
             <KnowledgePathPanel vaultId={vault.id} onClose={() => gs.setOpenPanel(null)} onPathFound={setPathOverride} />
           )}
           {gs.openPanel === 'snapshot' && <SnapshotPanel vaultId={vault.id} onClose={() => gs.setOpenPanel(null)} />}
+          {gs.openPanel === 'theme' && <GraphThemePanel onClose={() => gs.setOpenPanel(null)} />}
+          {gs.openPanel === 'core' && (
+            <KnowledgeCorePanel
+              vaultId={vault.id}
+              clusterStrategy={gs.clusterStrategy}
+              onClose={() => gs.setOpenPanel(null)}
+              onSelectNote={(id) => gs.selectNode(id)}
+            />
+          )}
         </div>
 
         {selectedNode && gs.showInspector && !gs.presentationMode && (
@@ -379,6 +448,50 @@ export function GlobalGraphPage() {
             <label className="flex items-center justify-between py-1 text-sm">
               <span>Animate layout</span>
               <input type="checkbox" checked={graphSettings.animate} onChange={(e) => updateGraph({ animate: e.target.checked })} />
+            </label>
+            <label className="flex items-center justify-between py-1 text-sm">
+              <span>Performance</span>
+              <select
+                value={graphSettings.performanceMode}
+                onChange={(e) => updateGraph({ performanceMode: e.target.value as GraphPerformanceMode })}
+                className="settings-select text-xs"
+              >
+                <option value="auto">Auto ({resolvePerformanceMode('auto', filtered.nodes.length)})</option>
+                <option value="low">Low</option>
+                <option value="balanced">Balanced</option>
+                <option value="high">High</option>
+                <option value="quality">Quality</option>
+              </select>
+            </label>
+            <label className="flex items-center justify-between py-1 text-sm">
+              <span>Color by</span>
+              <select
+                value={gs.colorStrategy}
+                onChange={(e) => gs.setColorStrategy(e.target.value as ColorStrategy)}
+                className="settings-select text-xs"
+              >
+                {COLOR_STRATEGIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center justify-between py-1 text-sm">
+              <span>Tag relations</span>
+              <input
+                type="checkbox"
+                checked={gs.relationKinds.has('tag-relation')}
+                onChange={() => gs.toggleRelationKind('tag-relation' as RelationKind)}
+              />
+            </label>
+            <label className="flex items-center justify-between py-1 text-sm">
+              <span>Folder relations</span>
+              <input
+                type="checkbox"
+                checked={gs.relationKinds.has('folder-relation')}
+                onChange={() => gs.toggleRelationKind('folder-relation' as RelationKind)}
+              />
             </label>
             <label className="flex items-center justify-between py-1 text-sm">
               <span>Cluster by</span>

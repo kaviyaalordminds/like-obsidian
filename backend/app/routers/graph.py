@@ -28,6 +28,7 @@ def global_graph(
     include_orphans: bool = Query(True),
     tag: list[str] | None = Query(None),
     folder: str | None = Query(None),
+    relations: list[str] | None = Query(None, description="Extra opt-in relation edges: tag-relation, folder-relation"),
 ):
     index = get_index(vault_root(vault))
     graph = graph_service.build_graph(
@@ -37,6 +38,8 @@ def global_graph(
         tag_filter=tag,
         folder_filter=folder,
     )
+    if relations:
+        graph.edges.extend(graph_service.relation_edges(graph, set(relations)))
     return _to_out(graph)
 
 

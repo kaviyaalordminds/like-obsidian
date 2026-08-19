@@ -47,7 +47,10 @@ export interface GraphNode {
   type: 'note' | 'unresolved'
   tags: string[]
   folder: string
+  created_at: number | null
   updated_at: number | null
+  word_count: number
+  status: string | null
 }
 
 export interface GraphEdge {
@@ -202,6 +205,9 @@ export interface FilteredNote {
 
 export interface GraphSnapshotState {
   mode?: string
+  colorStrategy?: string
+  themeId?: string
+  relationKinds?: string[]
   filters?: NoteFilterCriteria
   query?: string
   zoom?: number

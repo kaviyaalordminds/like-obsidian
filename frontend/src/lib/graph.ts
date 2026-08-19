@@ -47,6 +47,52 @@ export function degreeToRadius(degree: number, baseRadius: number, maxDegreeForS
   return Math.round(baseRadius * scale)
 }
 
+const CATEGORICAL_PALETTE = [
+  '#e08a3e', '#34d1c9', '#c94f6d', '#7fae3f', '#3e7fc9',
+  '#c9973e', '#9d6bff', '#3ecf7d', '#ff6b9d', '#5cc9f0',
+]
+
+/** Deterministic (same key -> same color, every render) categorical color —
+ * used for "color by folder/tag/cluster/file-type/status" strategies where
+ * there's no natural ordering, only identity. */
+export function hashColor(key: string, palette: string[] = CATEGORICAL_PALETTE): string {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+  return palette[h % palette.length]
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const m = hex.replace('#', '')
+  const n = parseInt(m.length === 3 ? m.split('').map((c) => c + c).join('') : m, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/** Linear color interpolation for continuous strategies (link/backlink
+ * count, created/modified recency) — `t` is clamped to [0, 1]. */
+export function lerpColor(from: string, to: string, t: number): string {
+  const clamped = Math.max(0, Math.min(1, t))
+  const [r1, g1, b1] = hexToRgb(from)
+  const [r2, g2, b2] = hexToRgb(to)
+  const r = Math.round(r1 + (r2 - r1) * clamped)
+  const g = Math.round(g1 + (g2 - g1) * clamped)
+  const b = Math.round(b1 + (b2 - b1) * clamped)
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Resolves the effective rendering quality tier for the graph's current
+ * size. "auto" recommends a lower tier as the visible node count grows —
+ * real thresholds against the actual node count, not a fixed setting the
+ * user has to remember to change themselves as their vault grows. */
+export function resolvePerformanceMode(
+  mode: 'auto' | 'low' | 'balanced' | 'high' | 'quality',
+  nodeCount: number,
+): 'low' | 'balanced' | 'high' | 'quality' {
+  if (mode !== 'auto') return mode
+  if (nodeCount > 800) return 'low'
+  if (nodeCount > 300) return 'balanced'
+  return 'quality'
+}
+
 /** BFS distance (undirected) from a root node, for radial/focus layouts and
  * for dimming nodes unrelated to the current focus. Unreachable nodes get
  * Infinity. */

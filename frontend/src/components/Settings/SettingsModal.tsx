@@ -35,7 +35,7 @@ export function SettingsModal() {
   useEffect(() => {
     if (vault) settings.persist(vault.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.theme, settings.editor, settings.graph, settings.dailyNotes])
+  }, [settings.theme, settings.editor, settings.graph, settings.dailyNotes, settings.customGraphThemes])
 
   if (!open) return null
 
