@@ -12,15 +12,26 @@ GraphNode:
   type: "note" | "unresolved"
   tags: list[str]
   folder: str
+  created_at: float | None   # best-effort file creation time
   updated_at: float | None   # mtime
+  word_count: int
+  status: str | None          # the note's own `status:` frontmatter key, if present
 
 GraphEdge:
   source: str
   target: str
-  type: "internal-link"
+  type: "internal-link" | "tag-relation" | "folder-relation"
 ```
 
-Every note in the index becomes a node. For each link in each note, `IndexService.resolve_link()` is tried; a resolved link becomes a `note → note` edge, an unresolved one becomes a `note → unresolved:<target>` edge plus a synthetic unresolved node (so the graph visually distinguishes "links to a real note" from "links to nothing yet," matching the resolved/unresolved wikilink rendering in the editor).
+Every note in the index becomes a node. For each link in each note, `IndexService.resolve_link()` is tried; a resolved link becomes a `note → note` edge, an unresolved one becomes a `note → unresolved:<target>` edge plus a synthetic unresolved node (so the graph visually distinguishes "links to a real note" from "links to nothing yet," matching the resolved/unresolved wikilink rendering in the editor). An `![[embed]]` whose target is an attachment (an image, PDF, ...) rather than another note is excluded from graph resolution entirely — it's covered by the Missing Attachments health check instead of showing up as a fake unresolved node; see [MARKDOWN.md](MARKDOWN.md#embeds-and-attachments).
+
+### Real (never hardcoded) metadata
+
+`GraphNode` also carries `created_at` (best-effort file creation time), `word_count`, and `status` (from the note's own `status:` frontmatter key, if present) — every one of these is read off the actual file, not synthesized, and feeds the color-strategy and filter engine below.
+
+### Relation edges (opt-in, layered on top of the wikilink graph)
+
+`GET /api/vaults/{id}/graph?relations=tag-relation&relations=folder-relation` (`graph_service.relation_edges()`) adds extra edges between notes that share a tag or live in the same folder — a real structural relationship, not a link, surfaced as a distinct edge type in the graph so "these notes are related by topic/location" is visible even without an explicit `[[link]]` between them. A group larger than 40 members is skipped rather than emitting an all-pairs edge set that would choke rendering for no benefit (a 500-note tag would be ~125k edges).
 
 ## Global graph
 
@@ -43,7 +54,7 @@ Controls exposed: zoom/pan/drag (native to Cytoscape), search, filter by folder/
 
 ## Visualization modes
 
-`GlobalGraphPage` renders through a single Cytoscape instance with a swappable stylesheet + layout, so switching modes never loses selection, filters, or pan/zoom state:
+`GlobalGraphPage` renders through a single Cytoscape instance with a swappable stylesheet + layout, so switching modes never loses selection, filters, or pan/zoom state. Eleven 2D modes ship real and tested (`GraphMode` in `store/graphStore.ts`); a 3D mode is documented-only Tier 2 scope (below), matching the product spec's "2D default, 3D optional":
 
 | Mode | Layout | Look |
 |---|---|---|
@@ -51,22 +62,50 @@ Controls exposed: zoom/pan/drag (native to Cytoscape), search, filter by folder/
 | Neural | `cose` | Softer glow styling, thinner edges |
 | Radial | `concentric`, ranked by BFS distance from the focused/root node | Rings radiating outward by hop distance |
 | Cinematic | `cose` | Dark styling with a rotating-ring SVG overlay tracking the selected node's `renderedPosition()`, halo/glow on selection, connected nodes brighten and unrelated nodes dim |
+| Tree | `breadthfirst` | Strict top-down hierarchy from the focused/root note |
+| Hierarchical | `breadthfirst`, horizontal | Left-to-right hierarchy, for wide rather than tall trees |
+| Cluster | `cose` + synthetic compound-parent nodes per cluster | Nodes grouped and boxed by cluster (folder- or connected-component-strategy), with collapse/expand per cluster |
+| Constellation | `cose`, sparser | Wider spacing, dimmer non-selected edges — reads as scattered "stars" rather than a dense mesh |
+| Circular | `circle` | Every node on one ring, ordered by degree |
+| Timeline | positions computed from real `created_at`/`updated_at`, not a layout algorithm | Notes placed left-to-right by date; see `frontend/src/lib/graph.ts` for the position computation |
+| DAG | `breadthfirst`, rooted at the real zero-indegree notes (computed per connected component, not a fixed root) | Topological layering — link direction reads top-to-bottom |
 
 Node size is never hardcoded: `degreeToRadius()` (`frontend/src/lib/graph.ts`) computes each node's on-screen size from its real link + backlink count (`computeDegrees()`), written into Cytoscape as a precomputed `data(size)` field (canvas-rendered stylesheets can't evaluate function-valued mappers reliably across `react-cytoscapejs` prop diffs, so sizing is computed once in JS rather than in the Cytoscape style rules). Dimming (search miss, filtered-out, or de-emphasized-on-selection) is the same pattern: a boolean `dimmed` data field toggled from JS, matched by a `node[?dimmed]` selector.
 
+## Themes
+
+20 built-in themes (`BUILTIN_GRAPH_THEMES`, `frontend/src/lib/graphThemes.ts`) — Obsidian Classic, Midnight, Aurora, Cyber, Arc Core, Reactor Amber, Crimson, Emerald, Violet, Solar, Ocean, Forest, Monochrome, Paper, Glass, Neon, Ice, Stealth, Quantum, Holographic — each a flat `GraphThemeColors` record (background/node/edge/text/cluster/... as hex) applied to the Cytoscape stylesheet independent of the visualization mode, so mode and theme are two separate, orthogonal choices. The custom theme builder (`GraphThemePanel.tsx`) duplicates a built-in as a starting point (`duplicateTheme()`, keeping a `baseId` pointer so "Reset to base" is real, not a guess), and supports save/rename/delete/export/import (JSON) — custom themes persist in `settingsStore.customGraphThemes`, per vault.
+
+## Node color strategies
+
+Independent of both mode and theme: `ColorStrategy` (`store/graphStore.ts`) picks *what a node's color means* — `folder`, `tag`, `cluster`, `linkCount`, `backlinkCount`, `created`, `modified`, `fileType`, `status` (from frontmatter), or `default` (the theme's flat node color, no per-node variation). Categorical strategies (folder/tag/cluster/fileType/status) hash the value to a color (`hashColor()`); continuous strategies (linkCount/backlinkCount/created/modified) interpolate between two theme-derived colors using the real min/max across the current node set (`lerpColor()`), never a hardcoded scale.
+
+## Performance modes
+
+`GraphPerformanceMode` (`settingsStore.ts`): `low` / `balanced` / `high` / `quality`, or `auto` (`resolvePerformanceMode()` in `lib/graph.ts`) which picks `low` above 800 nodes, `balanced` above 300, `quality` otherwise — a real, adjustable heuristic, not a fixed cutoff a large vault silently hits. The resolved tier gates animation complexity and label rendering density so a 5k–10k+ note vault stays interactive.
+
 ## Filtering, HUD, minimap, and other panel-level features
 
-- **Filter engine** (`graph_service`/`filter_service` + `GraphFilterPanel.tsx`) — folder, tag, date range, note type, link-count, backlink-count, orphan-only, pinned-only, unresolved-only, daily-notes-only, attachments — all combinable with AND.
+- **Filter engine** (`graph_service`/`filter_service` + `GraphFilterPanel.tsx`) — folder, tag, date range, note type, link-count, backlink-count, orphan-only, pinned-only, unresolved-only, daily-notes-only, attachments — all combinable with AND; NOT is expressed by inverting an individual filter's own toggle rather than a separate global negation (there is no combinable OR group across different filter fields today — see the Tier 2 note below).
 - **HUD** (`GraphHUD.tsx`) — node/edge/cluster/orphan counts, density, average connections, and a "most connected" list, all sourced from `GET /api/vaults/{id}/graph/stats` (`graph_metrics_service.compute_stats`) — never hardcoded.
 - **Minimap** (`GraphMinimap.tsx`) — a small overview canvas tracking the main viewport's `extent()`/`boundingBox()`, click-to-pan.
-- **Clusters** — `GET /api/vaults/{id}/graph/clusters` (`compute_clusters`, folder- or connected-component-strategy).
+- **Clusters** — `GET /api/vaults/{id}/graph/clusters` (`compute_clusters`, folder- or connected-component-strategy); Cluster mode (above) renders these as real compound-parent nodes, collapsible per cluster.
+- **Knowledge Core** (`KnowledgeCorePanel.tsx`) — "highly connected knowledge at a glance": top tags, largest clusters, and graph stats in one panel, each list read straight from already-computed `/graph/stats`, `/tags`, `/graph/clusters` — never invented.
 - **Knowledge Path** — `POST /api/vaults/{id}/graph/path` (`shortest_path`, BFS) finds the shortest chain of links between two notes and returns it as a subgraph (nodes + connecting edges only) for the UI to highlight; `404` if the two notes aren't connected.
 - **Snapshots** — `GraphSnapshot` (DB model) saves filters + zoom + selection + layout + mode as one named, restorable JSON blob per vault.
-- **Export** — PNG (Cytoscape's native `cy.png()`), JSON (raw node/edge data), and SVG (hand-built from node/edge positions, since Cytoscape has no native SVG export) — see `frontend/src/lib/graphExport.ts`.
+- **Export** — PNG (Cytoscape's native `cy.png()`), JSON (raw node/edge data), CSV (flattened node/edge rows), and SVG (hand-built from node/edge positions, since Cytoscape has no native SVG export) — see `frontend/src/lib/graphExport.ts`.
 - **Scan Network** — a staggered reveal animation over the real current node/edge set (not a canned animation); has a reduced-motion fallback that reveals immediately.
 - **Presentation mode** — fullscreen, chrome hidden, for walking through a graph live.
 
 All animation (cinematic rings, scan reveal, selection pulses) is gated by two independent settings — `effects.enabled` (visual effects on/off) and reduced-motion — both under Settings → Visual Effects, and both also respect `prefers-reduced-motion` by default.
+
+## Tier 2: documented, not implemented
+
+Scoped out of this build as "real minimal model, light/no UI" — the seam exists (`GraphMode`/relation-edge/theme plumbing is all mode-agnostic), but the following don't have runtime code:
+
+- **3D graph mode** — an actual 3D force-directed renderer (e.g. `three.js`/`react-force-graph-3d`) as a twelfth mode. The 2D engine's data layer (`GraphNode`/`GraphEdge`, unchanged) is exactly what a 3D renderer would consume; only the rendering layer would be new.
+- **Orbit / Galaxy modes** — the two most visually exotic named modes from the original spec (concentric-orbit and starfield-cluster layouts). Radial and Constellation above are the closest real analogs; a real Orbit/Galaxy mode would need custom layout math beyond what Cytoscape's built-in layouts provide out of the box.
+- **Combinable OR/NOT filter groups** — today's filter engine combines every active filter with AND, and a single filter can be inverted individually; a full boolean expression builder (arbitrary AND/OR/NOT groups) is unimplemented.
 
 ## Backlinks
 

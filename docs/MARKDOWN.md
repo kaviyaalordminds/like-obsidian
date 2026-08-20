@@ -30,9 +30,11 @@ Body content starts here.
 [[Note Name|Display Name]]
 [[Folder/Note Name]]
 [[Note Name#Heading|Alias]]
+[[Note Name^block-id]]
+[[Note Name#Heading^block-id|Alias]]
 ```
 
-`extract_links()` (`markdown_parser.WIKILINK_RE`) finds every `[[...]]` occurrence, skipping matches inside fenced or inline code so a code sample containing `[[literal brackets]]` doesn't get treated as a link. Each match captures `target`, optional `heading`, optional `alias`.
+`extract_links()` (`markdown_parser.WIKILINK_RE`) finds every `[[...]]` occurrence, skipping matches inside fenced or inline code so a code sample containing `[[literal brackets]]` doesn't get treated as a link. Each match captures `target`, optional `heading`, optional `alias`, and optional `block` (a block reference — both the bare `^block-id` form and Obsidian's own `#Heading^block-id` form resolve to the same `block` field). A block reference resolves and links to the note itself; scrolling to the specific block on open is not yet implemented.
 
 ### Resolution
 
@@ -57,6 +59,32 @@ The link-maintenance strategy is **automatic rewriting** (matching Obsidian's de
 - whether the link was folder-qualified (`[[Notes/Old]]` → `[[Notes/New]]`) or bare (`[[Old]]` → `[[New]]`)
 
 This applies recursively to folder renames/moves too — every nested note's path changes, so every note *outside* the folder that referenced any of them gets rewritten. See [ARCHITECTURE.md](ARCHITECTURE.md#the-rename-race-and-why-link-rewriting-is-a-two-phase-planapply) for why this is implemented as a plan-then-apply, not a single pass, and `backend/tests/test_rename_cascade.py` for the covered cases.
+
+## Embeds and attachments
+
+```markdown
+![[diagram.png]]
+![[Some Other Note]]
+```
+
+A leading `!` marks an embed rather than a plain link (`WikiLink.embed`, set by checking the character before the match in `extract_links()`). `markdown_parser.is_attachment_target()` classifies the target: a basename with a non-`.md` extension is an attachment (an image, PDF, etc.); anything else is a note transclusion — the target syntax is identical either way.
+
+- **Attachment embed** (`![[diagram.png]]`) renders as a real `<img>` in the preview, pointed at `GET /api/vaults/{id}/files/{path}` (`lib/wikilink.ts#transformWikilinks`) — currently images only (`.png/.jpg/.jpeg/.gif/.webp/.svg/.bmp`); other attachment types render as a plain link to the file for now. Attachment embeds are excluded from note-link resolution entirely (no graph edge, no "unresolved" node, no broken-link entry) — a missing attachment is a *Missing Attachments* health check finding instead, not a broken wikilink. See [GRAPH.md](GRAPH.md) and the health-check list below.
+- **Note transclusion** (`![[Some Note]]`) still resolves and links exactly like a plain `[[wikilink]]` (real graph edge, real backlink) — it just renders as a normal link rather than inlining the target note's content; full inline transclusion is a future extension.
+
+## Vault health checks
+
+`health_service.py` computes every metric fresh from the live index on each `GET /health` (see [ARCHITECTURE.md](ARCHITECTURE.md) — nothing here is cached or hardcoded):
+
+| Check | What it flags |
+|---|---|
+| Orphans | Notes with zero incoming or outgoing links |
+| Broken links | `[[wikilink]]` targets that don't resolve to any note (attachment embeds excluded, see above) |
+| Duplicates | Candidate duplicate notes by title-word Jaccard similarity — a heuristic starting point, not a semantic match |
+| Empty / large / stale notes | Body under 20 chars / raw text over 20,000 chars / not modified in over a year |
+| No metadata | No frontmatter block at all |
+| Invalid properties | A frontmatter block that exists but fails to parse as valid YAML (`has_malformed_frontmatter()`) — distinct from having none |
+| Missing attachments | An `![[embed]]` target that doesn't match any file anywhere in the vault |
 
 ## Tags
 
