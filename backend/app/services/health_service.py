@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from app.services.graph_service import build_graph
 from app.services.graph_metrics_service import compute_degrees
 from app.services.index_service import IndexService
+from app.services.markdown_parser import has_malformed_frontmatter, is_attachment_target
 
 EMPTY_BODY_CHARS = 20
 LARGE_NOTE_CHARS = 20_000
@@ -29,9 +30,46 @@ def broken_links(index: IndexService) -> list[BrokenLink]:
     grouped: dict[str, list[dict]] = {}
     for path, indexed in index.all_notes().items():
         for link in indexed.parsed.links:
+            if link.embed and is_attachment_target(link.target):
+                continue  # a missing image/file, not a missing note — see missing_attachments()
             if index.resolve_link(link.target) is None:
                 grouped.setdefault(link.target, []).append({"path": path, "title": indexed.parsed.title})
     return [BrokenLink(target=target, referenced_from=refs) for target, refs in sorted(grouped.items())]
+
+
+@dataclass
+class MissingAttachment:
+    target: str
+    referenced_from: list[dict] = field(default_factory=list)  # [{path, title}]
+
+
+def missing_attachments(index: IndexService) -> list[MissingAttachment]:
+    """Embedded files (`![[diagram.png]]`) whose target doesn't exist
+    anywhere in the vault. Matched by filename against every file on disk
+    (not just notes — attachments aren't indexed), same shortest-match
+    spirit as note link resolution."""
+    existing = {p.name.lower() for p in index.root.rglob("*") if p.is_file()}
+    grouped: dict[str, list[dict]] = {}
+    for path, indexed in index.all_notes().items():
+        for link in indexed.parsed.links:
+            if not (link.embed and is_attachment_target(link.target)):
+                continue
+            basename = link.target.rsplit("/", 1)[-1]
+            if basename.lower() not in existing:
+                grouped.setdefault(link.target, []).append({"path": path, "title": indexed.parsed.title})
+    return [MissingAttachment(target=target, referenced_from=refs) for target, refs in sorted(grouped.items())]
+
+
+def invalid_properties(index: IndexService) -> list[dict]:
+    """Notes whose frontmatter block exists but fails to parse as valid
+    YAML — a stray colon, mismatched quotes, a bare list where a mapping
+    is expected. Distinct from `no_metadata`, which just means there's no
+    frontmatter at all (not that it's broken)."""
+    return [
+        {"path": path, "title": indexed.parsed.title}
+        for path, indexed in index.all_notes().items()
+        if has_malformed_frontmatter(indexed.parsed.raw)
+    ]
 
 
 def orphan_notes(index: IndexService) -> list[dict]:
@@ -100,6 +138,8 @@ class HealthReport:
     large_note_count: int
     old_note_count: int
     no_metadata_count: int
+    invalid_properties_count: int
+    missing_attachment_count: int
     recommendations: list[str] = field(default_factory=list)
 
 
@@ -119,6 +159,8 @@ def health_report(index: IndexService, all_declared_tags: list[str] | None = Non
     broken = broken_links(index)
     orphans = orphan_notes(index)
     dupes = duplicate_candidates(index)
+    invalid_props = invalid_properties(index)
+    missing_attach = missing_attachments(index)
 
     recommendations = []
     if orphans:
@@ -131,6 +173,10 @@ def health_report(index: IndexService, all_declared_tags: list[str] | None = Non
         recommendations.append(f"{len(empty_notes)} note(s) are essentially empty.")
     if old_notes:
         recommendations.append(f"{len(old_notes)} note(s) haven't been touched in over a year.")
+    if invalid_props:
+        recommendations.append(f"{len(invalid_props)} note(s) have frontmatter that isn't valid YAML.")
+    if missing_attach:
+        recommendations.append(f"{len(missing_attach)} embedded attachment(s) point to a file that doesn't exist.")
 
     return HealthReport(
         orphan_count=len(orphans),
@@ -141,5 +187,7 @@ def health_report(index: IndexService, all_declared_tags: list[str] | None = Non
         large_note_count=len(large_notes),
         old_note_count=len(old_notes),
         no_metadata_count=len(no_metadata),
+        invalid_properties_count=len(invalid_props),
+        missing_attachment_count=len(missing_attach),
         recommendations=recommendations,
     )

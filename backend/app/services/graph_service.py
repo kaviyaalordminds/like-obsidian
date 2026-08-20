@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.services.index_service import IndexService
+from app.services.markdown_parser import is_attachment_target
 
 
 @dataclass
@@ -77,6 +78,8 @@ def build_graph(
 
     for path, indexed in notes.items():
         for link in indexed.parsed.links:
+            if link.embed and is_attachment_target(link.target):
+                continue  # an image/file embed, not a note relationship — see Missing Attachments health check
             resolved = index.resolve_link(link.target, path)
             if resolved:
                 edges.append(GraphEdge(source=path, target=resolved))

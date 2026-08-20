@@ -39,3 +39,18 @@ def duplicates(vault: models.Vault = Depends(get_vault)):
         {"a": d.a, "b": d.b, "similarity": d.similarity}
         for d in health_service.duplicate_candidates(index)
     ]
+
+
+@router.get("/missing-attachments")
+def missing_attachments(vault: models.Vault = Depends(get_vault)):
+    index = get_index(vault_root(vault))
+    return [
+        {"target": m.target, "referenced_from": m.referenced_from}
+        for m in health_service.missing_attachments(index)
+    ]
+
+
+@router.get("/invalid-properties")
+def invalid_properties(vault: models.Vault = Depends(get_vault)):
+    index = get_index(vault_root(vault))
+    return health_service.invalid_properties(index)

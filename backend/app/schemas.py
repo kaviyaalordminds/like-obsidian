@@ -188,6 +188,8 @@ class HealthReportOut(BaseModel):
     large_note_count: int
     old_note_count: int
     no_metadata_count: int
+    invalid_properties_count: int
+    missing_attachment_count: int
     recommendations: list[str]
 
 

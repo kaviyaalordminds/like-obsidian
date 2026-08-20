@@ -29,6 +29,8 @@ export interface NoteLink {
   target: string
   alias: string | null
   raw: string
+  block: string | null
+  embed: boolean
 }
 
 export interface Note {
@@ -152,6 +154,8 @@ export interface HealthReport {
   large_note_count: number
   old_note_count: number
   no_metadata_count: number
+  invalid_properties_count: number
+  missing_attachment_count: number
   recommendations: string[]
 }
 
@@ -164,6 +168,16 @@ export interface OrphanNote {
 export interface BrokenLinkGroup {
   target: string
   referenced_from: { path: string; title: string }[]
+}
+
+export interface MissingAttachmentGroup {
+  target: string
+  referenced_from: { path: string; title: string }[]
+}
+
+export interface InvalidPropertyNote {
+  path: string
+  title: string
 }
 
 export interface DuplicateCandidate {

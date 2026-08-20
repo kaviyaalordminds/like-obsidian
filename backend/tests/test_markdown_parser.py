@@ -2,6 +2,8 @@ from app.services.markdown_parser import (
     extract_headings,
     extract_links,
     extract_tags,
+    has_malformed_frontmatter,
+    is_attachment_target,
     parse_frontmatter,
     parse_note,
     serialize_frontmatter,
@@ -67,6 +69,64 @@ def test_note_title_prefers_frontmatter_then_heading_then_fallback():
 
     parsed3 = parse_note("No heading here.\n", "fallback")
     assert parsed3.title == "fallback"
+
+
+def test_extract_links_block_reference():
+    body = "See [[Note^abc123]] and [[Note#Heading^xyz|Alias]] for details."
+    links = extract_links(body)
+    assert links[0].target == "Note"
+    assert links[0].block == "abc123"
+    assert links[0].heading is None
+    assert links[1].target == "Note"
+    assert links[1].heading == "Heading"
+    assert links[1].block == "xyz"
+    assert links[1].alias == "Alias"
+
+
+def test_extract_links_plain_link_has_no_block():
+    links = extract_links("[[Plain Note]]")
+    assert links[0].block is None
+    assert links[0].embed is False
+
+
+def test_extract_links_detects_embeds():
+    body = "Here is an image: ![[diagram.png]] and a note transclusion ![[Some Note]] and a normal [[Link]]."
+    links = extract_links(body)
+    by_target = {l.target: l for l in links}
+    assert by_target["diagram.png"].embed is True
+    assert by_target["diagram.png"].raw == "![[diagram.png]]"
+    assert by_target["Some Note"].embed is True
+    assert by_target["Link"].embed is False
+
+
+def test_extract_links_embed_start_offset_includes_bang():
+    body = "prefix ![[image.png]] suffix"
+    links = extract_links(body)
+    link = links[0]
+    assert body[link.start : link.end] == "![[image.png]]"
+
+
+def test_is_attachment_target():
+    assert is_attachment_target("diagram.png") is True
+    assert is_attachment_target("Folder/photo.JPG") is True
+    assert is_attachment_target("Some Note") is False
+    assert is_attachment_target("Some Note.md") is False
+
+
+def test_has_malformed_frontmatter_true_for_broken_yaml():
+    raw = "---\ntitle: [Unclosed\n---\nBody.\n"
+    assert has_malformed_frontmatter(raw) is True
+
+
+def test_has_malformed_frontmatter_false_for_valid_or_missing():
+    assert has_malformed_frontmatter("---\ntitle: Fine\n---\nBody.\n") is False
+    assert has_malformed_frontmatter("No frontmatter at all.\n") is False
+    assert has_malformed_frontmatter("---\n---\nBody.\n") is False
+
+
+def test_has_malformed_frontmatter_true_for_non_mapping_top_level():
+    raw = "---\n- just\n- a\n- list\n---\nBody.\n"
+    assert has_malformed_frontmatter(raw) is True
 
 
 def test_note_title_ignores_tag_only_lines():

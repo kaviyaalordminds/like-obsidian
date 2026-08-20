@@ -68,7 +68,7 @@ def _note_out(root, rel_path: str) -> schemas.NoteOut:
         frontmatter=parsed.frontmatter,
         tags=parsed.tags,
         headings=[asdict(h) for h in parsed.headings],
-        links=[{"target": l.target, "alias": l.alias, "raw": l.raw} for l in parsed.links],
+        links=[{"target": l.target, "alias": l.alias, "raw": l.raw, "block": l.block, "embed": l.embed} for l in parsed.links],
         modified_at=stat.st_mtime,
     )
 

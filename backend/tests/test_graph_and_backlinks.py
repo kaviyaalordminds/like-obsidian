@@ -26,6 +26,19 @@ def test_graph_resolves_links_and_flags_unresolved(tmp_vault):
     assert ("Notes/AI.md", "Notes/Machine Learning.md") in edge_pairs
 
 
+def test_graph_ignores_attachment_embeds_but_links_note_transclusions(tmp_vault):
+    write(tmp_vault, "A.md", "![[missing-diagram.png]] and ![[B]]")
+    write(tmp_vault, "B.md", "# B")
+    idx = _index(tmp_vault)
+    graph = graph_service.build_graph(idx)
+
+    unresolved = [n for n in graph.nodes if n.type == "unresolved"]
+    assert unresolved == []  # the image embed must not become a fake "unresolved" node
+
+    edge_pairs = {(e.source, e.target) for e in graph.edges}
+    assert ("A.md", "B.md") in edge_pairs  # a note transclusion is still a real link
+
+
 def test_graph_excludes_orphans_when_requested(tmp_vault):
     write(tmp_vault, "Notes/A.md", "[[B]]")
     write(tmp_vault, "Notes/B.md", "# B")

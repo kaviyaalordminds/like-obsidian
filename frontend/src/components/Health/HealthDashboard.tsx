@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Link2Off, Copy, Ghost, HeartPulse, X, Columns2 } from 'lucide-react'
+import { AlertTriangle, Link2Off, Copy, Ghost, HeartPulse, X, Columns2, ImageOff, FileWarning } from 'lucide-react'
 import { api } from '@/api/client'
 import { useVaultStore } from '@/store/vaultStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useUIStore } from '@/store/uiStore'
-import type { BrokenLinkGroup, DuplicateCandidate, HealthReport, Note, OrphanNote } from '@/types'
+import type {
+  BrokenLinkGroup,
+  DuplicateCandidate,
+  HealthReport,
+  InvalidPropertyNote,
+  MissingAttachmentGroup,
+  Note,
+  OrphanNote,
+} from '@/types'
 
-type Tab = 'overview' | 'orphans' | 'broken' | 'duplicates'
+type Tab = 'overview' | 'orphans' | 'broken' | 'duplicates' | 'attachments' | 'properties'
 
 export function HealthDashboard() {
   const vault = useVaultStore((s) => s.currentVault)
@@ -17,6 +25,8 @@ export function HealthDashboard() {
   const [orphans, setOrphans] = useState<OrphanNote[]>([])
   const [broken, setBroken] = useState<BrokenLinkGroup[]>([])
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([])
+  const [missingAttachments, setMissingAttachments] = useState<MissingAttachmentGroup[]>([])
+  const [invalidProperties, setInvalidProperties] = useState<InvalidPropertyNote[]>([])
   const [ignoredDuplicates, setIgnoredDuplicates] = useState<Set<string>>(new Set())
   const [comparing, setComparing] = useState<DuplicateCandidate | null>(null)
   const [compareNotes, setCompareNotes] = useState<[Note, Note] | null>(null)
@@ -27,6 +37,8 @@ export function HealthDashboard() {
     api.orphans(vault.id).then(setOrphans)
     api.brokenLinks(vault.id).then(setBroken)
     api.duplicates(vault.id).then(setDuplicates)
+    api.missingAttachments(vault.id).then(setMissingAttachments)
+    api.invalidProperties(vault.id).then(setInvalidProperties)
   }
 
   useEffect(load, [vault])
@@ -84,6 +96,8 @@ export function HealthDashboard() {
             ['orphans', `Orphans (${orphans.length})`],
             ['broken', `Broken links (${broken.length})`],
             ['duplicates', `Duplicates (${duplicates.length})`],
+            ['attachments', `Missing attachments (${missingAttachments.length})`],
+            ['properties', `Invalid properties (${invalidProperties.length})`],
           ] as [Tab, string][]
         ).map(([id, label]) => (
           <button
@@ -111,6 +125,8 @@ export function HealthDashboard() {
             <Metric label="Large notes" value={report.large_note_count} />
             <Metric label="Stale (1yr+)" value={report.old_note_count} />
             <Metric label="No metadata" value={report.no_metadata_count} />
+            <Metric label="Invalid properties" value={report.invalid_properties_count} />
+            <Metric label="Missing attachments" value={report.missing_attachment_count} />
           </div>
 
           <div>
@@ -212,6 +228,48 @@ export function HealthDashboard() {
                 </div>
               </div>
             ))}
+        </div>
+      )}
+
+      {tab === 'attachments' && (
+        <div className="space-y-3">
+          {missingAttachments.length === 0 && <Empty icon={ImageOff} text="No missing attachments — every embed resolves to a real file." />}
+          {missingAttachments.map((m) => (
+            <div key={m.target} className="p-3 rounded-md border" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <ImageOff size={13} className="text-[var(--color-unresolved)]" />
+                <span className="font-mono text-sm text-[var(--color-unresolved)]">![[{m.target}]]</span>
+              </div>
+              <div className="text-xs text-[var(--color-text-faint)] mb-1">Referenced from:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {m.referenced_from.map((r) => (
+                  <button
+                    key={r.path}
+                    onClick={() => open(r.path)}
+                    className="text-xs px-2 py-1 rounded bg-[var(--color-bg-inset)] hover:text-[var(--color-accent)]"
+                  >
+                    {r.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'properties' && (
+        <div className="space-y-1">
+          {invalidProperties.length === 0 && <Empty icon={FileWarning} text="Every note's frontmatter parses as valid YAML." />}
+          {invalidProperties.map((n) => (
+            <button
+              key={n.path}
+              onClick={() => open(n.path)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-[var(--color-bg-inset)] text-left text-sm"
+            >
+              <FileWarning size={13} className="text-[var(--color-unresolved)] shrink-0" />
+              <span>{n.title}</span>
+            </button>
+          ))}
         </div>
       )}
 

@@ -15,6 +15,8 @@ import type {
   GraphSnapshot,
   GraphStats,
   HealthReport,
+  InvalidPropertyNote,
+  MissingAttachmentGroup,
   Note,
   NoteFilterCriteria,
   NoteSuggestions,
@@ -174,6 +176,8 @@ export const api = {
   orphans: (vaultId: string) => request<OrphanNote[]>(`/vaults/${vaultId}/orphans`),
   brokenLinks: (vaultId: string) => request<BrokenLinkGroup[]>(`/vaults/${vaultId}/broken-links`),
   duplicates: (vaultId: string) => request<DuplicateCandidate[]>(`/vaults/${vaultId}/duplicates`),
+  missingAttachments: (vaultId: string) => request<MissingAttachmentGroup[]>(`/vaults/${vaultId}/missing-attachments`),
+  invalidProperties: (vaultId: string) => request<InvalidPropertyNote[]>(`/vaults/${vaultId}/invalid-properties`),
 
   // Collections
   listCollections: (vaultId: string) => request<Collection[]>(`/vaults/${vaultId}/collections`),

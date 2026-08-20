@@ -21,8 +21,10 @@ interface Props {
 
 export function MarkdownPreview({ content, onOpenNote, onCreateNote }: Props) {
   const tree = useVaultStore((s) => s.tree)
+  const vaultId = useVaultStore((s) => s.currentVault?.id)
   const files = useMemo(() => flattenFiles(tree), [tree])
-  const transformed = useMemo(() => transformWikilinks(content), [content])
+  const filesBaseUrl = vaultId ? `/api/vaults/${vaultId}/files` : undefined
+  const transformed = useMemo(() => transformWikilinks(content, filesBaseUrl), [content, filesBaseUrl])
 
   return (
     <div className="markdown-body px-8 py-6 max-w-[820px] mx-auto">

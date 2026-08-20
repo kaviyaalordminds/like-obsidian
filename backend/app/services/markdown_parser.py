@@ -13,9 +13,18 @@ import yaml
 
 FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?", re.DOTALL)
 
-# [[Target]], [[Target|Alias]], [[Folder/Target#Heading|Alias]]
+# [[Target]], [[Target|Alias]], [[Folder/Target#Heading|Alias]],
+# [[Target^BlockId]], [[Target#Heading^BlockId|Alias]] (block references —
+# both the bare `^Block` form and Obsidian's own `#^Block` form resolve to
+# the same `block` group here since the `#Heading` group is optional).
+# A leading `!` (checked separately by the caller, not part of this regex)
+# marks an embed rather than a plain link — `![[image.png]]`,
+# `![[Some Note]]` — same target syntax either way.
 WIKILINK_RE = re.compile(
-    r"\[\[(?P<target>[^\]|#]+)(?:#(?P<heading>[^\]|]+))?(?:\|(?P<alias>[^\]]+))?\]\]"
+    r"\[\[(?P<target>[^\]|#^]+)"
+    r"(?:#(?P<heading>[^\]|^]+))?"
+    r"(?:\^(?P<block>[^\]|]+))?"
+    r"(?:\|(?P<alias>[^\]]+))?\]\]"
 )
 
 # #tag or #Nested/Tag — not preceded by a word char (so "word#3" doesn't match)
@@ -35,6 +44,10 @@ class WikiLink:
     raw: str
     start: int
     end: int
+    block: str | None = None
+    # True for `![[...]]` — an embed (attachment or transcluded note),
+    # never a plain reference link.
+    embed: bool = False
 
 
 @dataclass
@@ -75,6 +88,36 @@ def parse_frontmatter(raw: str) -> tuple[dict, str]:
     return data, body
 
 
+def is_attachment_target(target: str) -> bool:
+    """True for an embed target that's a file on disk (image, PDF, audio…)
+    rather than another note — `![[diagram.png]]` vs. a note transclusion
+    like `![[Some Note]]`, which still resolves and links like a normal
+    wikilink. Note targets are written without an extension; anything with
+    one other than `.md` is an attachment."""
+    basename = target.rsplit("/", 1)[-1]
+    if "." not in basename:
+        return False
+    return not basename.lower().endswith(".md")
+
+
+def has_malformed_frontmatter(raw: str) -> bool:
+    """True when the note has a `---`-delimited frontmatter block that
+    doesn't actually parse as valid YAML (or parses to something other than
+    a mapping) — e.g. a stray colon, mismatched quotes, or a bare list at
+    the top level. `parse_frontmatter` already swallows this into `{}` so
+    a genuinely-empty-frontmatter note and a broken one look the same from
+    its output; this re-checks the raw text to tell them apart for the
+    Invalid Properties health check."""
+    match = FRONTMATTER_RE.match(raw)
+    if not match:
+        return False
+    try:
+        data = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        return True
+    return data is not None and not isinstance(data, dict)
+
+
 def serialize_frontmatter(frontmatter: dict, body: str) -> str:
     if not frontmatter:
         return body
@@ -86,13 +129,16 @@ def extract_links(body: str) -> list[WikiLink]:
     clean = _strip_code(body)
     links = []
     for m in WIKILINK_RE.finditer(clean):
+        embed = m.start() > 0 and clean[m.start() - 1] == "!"
         links.append(
             WikiLink(
                 target=m.group("target").strip(),
                 alias=(m.group("alias").strip() if m.group("alias") else None),
                 heading=(m.group("heading").strip() if m.group("heading") else None),
-                raw=m.group(0),
-                start=m.start(),
+                block=(m.group("block").strip() if m.group("block") else None),
+                embed=embed,
+                raw=("!" + m.group(0)) if embed else m.group(0),
+                start=(m.start() - 1) if embed else m.start(),
                 end=m.end(),
             )
         )

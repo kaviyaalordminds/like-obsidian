@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from app.services.graph_metrics_service import compute_degrees
 from app.services.graph_service import build_graph
 from app.services.index_service import IndexService
+from app.services.markdown_parser import is_attachment_target
 
 
 @dataclass
@@ -68,7 +69,9 @@ def matching_notes(index: IndexService, filt: NoteFilter, pinned: set[str] | Non
         if filt.orphans_only and degree and degree.total != 0:
             continue
         if filt.has_unresolved_only and not any(
-            index.resolve_link(link.target) is None for link in parsed.links
+            index.resolve_link(link.target) is None
+            for link in parsed.links
+            if not (link.embed and is_attachment_target(link.target))
         ):
             continue
 

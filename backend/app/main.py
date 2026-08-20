@@ -14,6 +14,7 @@ from app.routers import (
     collections,
     daily_notes,
     events,
+    files,
     folders,
     graph,
     health as health_router,
@@ -71,3 +72,4 @@ app.include_router(activity.router)
 app.include_router(ai.router)
 app.include_router(events.router)
 app.include_router(obsidian_rest.router)
+app.include_router(files.router)

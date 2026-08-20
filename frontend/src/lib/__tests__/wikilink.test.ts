@@ -31,6 +31,36 @@ describe('transformWikilinks', () => {
     const out = transformWikilinks('[[A]] and [[B]]')
     expect(out).toBe('[A](wikilink://A) and [B](wikilink://B)')
   })
+
+  it('resolves a block reference to a normal link on the note', () => {
+    const out = transformWikilinks('[[Note^abc123]]')
+    expect(out).toBe('[Note](wikilink://Note)')
+  })
+
+  it('resolves a heading + block reference, keeping the alias', () => {
+    const out = transformWikilinks('[[Note#Heading^abc123|Alias]]')
+    expect(out).toContain('[Alias](wikilink://Note%23Heading)')
+  })
+
+  it('renders an image embed as a real markdown image against the files base URL', () => {
+    const out = transformWikilinks('![[diagram.png]]', '/api/vaults/v1/files')
+    expect(out).toBe('![diagram.png](/api/vaults/v1/files/diagram.png)')
+  })
+
+  it('falls back to a plain link for an image embed with no files base URL', () => {
+    const out = transformWikilinks('![[diagram.png]]')
+    expect(out).toContain('[diagram.png](wikilink://diagram.png)')
+  })
+
+  it('treats a note transclusion embed as a normal link, not an image', () => {
+    const out = transformWikilinks('![[Some Note]]', '/api/vaults/v1/files')
+    expect(out).toBe('[Some Note](wikilink://Some%20Note)')
+  })
+
+  it('encodes nested attachment folder paths in the image URL', () => {
+    const out = transformWikilinks('![[Attachments/diagram.png]]', '/api/vaults/v1/files')
+    expect(out).toBe('![Attachments/diagram.png](/api/vaults/v1/files/Attachments/diagram.png)')
+  })
 })
 
 describe('isWikilinkHref / targetFromHref', () => {

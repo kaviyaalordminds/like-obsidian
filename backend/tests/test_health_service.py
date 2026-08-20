@@ -48,3 +48,51 @@ def test_health_report_aggregates_real_counts(tmp_vault):
     assert report.broken_link_count == 1
     assert report.empty_note_count >= 1
     assert len(report.recommendations) > 0
+
+
+def test_broken_links_ignores_attachment_embeds(tmp_vault):
+    write(tmp_vault, "A.md", "![[missing-image.png]] and [[Missing Note]]")
+    idx = _index(tmp_vault)
+    broken = health_service.broken_links(idx)
+    assert [b.target for b in broken] == ["Missing Note"]
+
+
+def test_missing_attachments_flags_embed_with_no_matching_file(tmp_vault):
+    write(tmp_vault, "A.md", "![[missing-image.png]]")
+    idx = _index(tmp_vault)
+    missing = health_service.missing_attachments(idx)
+    assert len(missing) == 1
+    assert missing[0].target == "missing-image.png"
+    assert missing[0].referenced_from[0]["path"] == "A.md"
+
+
+def test_missing_attachments_resolves_existing_file(tmp_vault):
+    (tmp_vault / "Attachments").mkdir()
+    (tmp_vault / "Attachments" / "diagram.png").write_bytes(b"fake-png-bytes")
+    write(tmp_vault, "A.md", "![[diagram.png]]")
+    idx = _index(tmp_vault)
+    assert health_service.missing_attachments(idx) == []
+
+
+def test_missing_attachments_ignores_note_transclusion(tmp_vault):
+    write(tmp_vault, "A.md", "![[Some Note]]")
+    write(tmp_vault, "Some Note.md", "content")
+    idx = _index(tmp_vault)
+    assert health_service.missing_attachments(idx) == []
+
+
+def test_invalid_properties_flags_broken_yaml(tmp_vault):
+    write(tmp_vault, "Broken.md", "---\ntitle: [Unclosed\n---\nBody.\n")
+    write(tmp_vault, "Fine.md", "---\ntitle: Fine\n---\nBody.\n")
+    write(tmp_vault, "NoFrontmatter.md", "Just text.\n")
+    idx = _index(tmp_vault)
+    bad = health_service.invalid_properties(idx)
+    assert [b["path"] for b in bad] == ["Broken.md"]
+
+
+def test_health_report_includes_new_metrics(tmp_vault):
+    write(tmp_vault, "Broken.md", "---\ntitle: [Unclosed\n---\n![[missing.png]]\n")
+    idx = _index(tmp_vault)
+    report = health_service.health_report(idx)
+    assert report.invalid_properties_count == 1
+    assert report.missing_attachment_count == 1
