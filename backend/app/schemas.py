@@ -8,6 +8,16 @@ class VaultCreate(BaseModel):
     icon: str = "📓"
 
 
+class VaultConnect(BaseModel):
+    """Connects an existing folder on disk as a vault (Part 56, Mode A) —
+    e.g. an existing Obsidian vault. Nothing is copied or moved; the app
+    reads and writes the folder in place."""
+
+    path: str
+    name: str | None = None
+    icon: str = "📁"
+
+
 class VaultOut(BaseModel):
     id: str
     name: str
@@ -15,6 +25,8 @@ class VaultOut(BaseModel):
     icon: str
     created_at: str
     last_opened_at: str
+    external_path: str | None = None
+    is_obsidian_vault: bool = False
 
     model_config = {"from_attributes": True}
 

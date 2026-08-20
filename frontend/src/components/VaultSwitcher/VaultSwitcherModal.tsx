@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, FolderInput } from 'lucide-react'
 import { useUIStore } from '@/store/uiStore'
 import { useVaultStore } from '@/store/vaultStore'
+import { ApiError } from '@/api/client'
 
 export function VaultSwitcherModal() {
   const open = useUIStore((s) => s.vaultSwitcherOpen)
@@ -11,8 +12,12 @@ export function VaultSwitcherModal() {
   const loadVaults = useVaultStore((s) => s.loadVaults)
   const openVault = useVaultStore((s) => s.openVault)
   const createVault = useVaultStore((s) => s.createVault)
+  const connectVault = useVaultStore((s) => s.connectVault)
   const forgetVault = useVaultStore((s) => s.forgetVault)
   const [newName, setNewName] = useState('')
+  const [connectPath, setConnectPath] = useState('')
+  const [connecting, setConnecting] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) loadVaults()
@@ -26,6 +31,22 @@ export function VaultSwitcherModal() {
     setNewName('')
     await openVault(vault)
     setOpen(false)
+  }
+
+  const handleConnect = async () => {
+    if (!connectPath.trim() || connecting) return
+    setConnecting(true)
+    setConnectError(null)
+    try {
+      const vault = await connectVault(connectPath.trim())
+      setConnectPath('')
+      await openVault(vault)
+      setOpen(false)
+    } catch (e) {
+      setConnectError(e instanceof ApiError ? e.message : 'Could not connect that folder.')
+    } finally {
+      setConnecting(false)
+    }
   }
 
   return (
@@ -59,6 +80,15 @@ export function VaultSwitcherModal() {
               >
                 <span>{v.icon}</span>
                 <span className="truncate">{v.name}</span>
+                {v.external_path && (
+                  <span
+                    title={v.external_path}
+                    className="shrink-0 flex items-center gap-1 text-xs px-1.5 py-0.5 rounded text-[var(--color-text-faint)]"
+                    style={{ background: 'var(--color-bg-inset)' }}
+                  >
+                    <FolderInput size={10} /> {v.is_obsidian_vault ? 'Obsidian vault' : 'connected folder'}
+                  </span>
+                )}
               </button>
               <button
                 title="Remove from list (keeps files on disk)"
@@ -90,6 +120,31 @@ export function VaultSwitcherModal() {
           >
             <Plus size={14} /> Create
           </button>
+        </div>
+
+        <div className="pt-3 mt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-text-faint)] mb-1.5">
+            <FolderInput size={12} /> Connect an existing folder (e.g. an Obsidian vault) — read and written in place, nothing is copied.
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              value={connectPath}
+              onChange={(e) => setConnectPath(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+              placeholder="/absolute/path/to/vault"
+              className="flex-1 px-2.5 py-1.5 rounded-md border bg-transparent text-sm outline-none font-mono"
+              style={{ borderColor: 'var(--color-border)' }}
+            />
+            <button
+              onClick={handleConnect}
+              disabled={connecting || !connectPath.trim()}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm border disabled:opacity-40"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <FolderInput size={14} /> {connecting ? 'Connecting…' : 'Connect'}
+            </button>
+          </div>
+          {connectError && <p className="text-xs text-[var(--color-danger)] mt-1.5">{connectError}</p>}
         </div>
       </div>
     </div>

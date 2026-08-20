@@ -27,6 +27,12 @@ class Vault(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     icon: Mapped[str] = mapped_column(String(16), default="📓")
+    # Set only for a vault connected from an existing folder on disk (Part
+    # 56, Mode A) — e.g. an existing Obsidian vault. When null, the vault's
+    # files live under the app's own managed VAULTS_ROOT/slug instead. Either
+    # way `vault_root()` is the one place that resolves it, so nothing else
+    # needs to know which kind a given vault is.
+    external_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     last_opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

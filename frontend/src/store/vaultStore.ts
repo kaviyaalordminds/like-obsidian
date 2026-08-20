@@ -11,6 +11,7 @@ interface VaultState {
 
   loadVaults: () => Promise<void>
   createVault: (name: string) => Promise<Vault>
+  connectVault: (path: string, name?: string) => Promise<Vault>
   openVault: (vault: Vault) => Promise<void>
   refreshTree: () => Promise<void>
   forgetVault: (vaultId: string) => Promise<void>
@@ -42,6 +43,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   createVault: async (name: string) => {
     const vault = await api.createVault(name)
+    set((s) => ({ vaults: [vault, ...s.vaults] }))
+    return vault
+  },
+
+  connectVault: async (path: string, name?: string) => {
+    const vault = await api.connectVault(path, name)
     set((s) => ({ vaults: [vault, ...s.vaults] }))
     return vault
   },

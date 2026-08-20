@@ -64,6 +64,8 @@ export const api = {
   listVaults: () => request<Vault[]>('/vaults'),
   createVault: (name: string, icon = '📓') =>
     request<Vault>('/vaults', { method: 'POST', body: JSON.stringify({ name, icon }) }),
+  connectVault: (path: string, name?: string, icon = '📁') =>
+    request<Vault>('/vaults/connect', { method: 'POST', body: JSON.stringify({ path, name, icon }) }),
   openVault: (vaultId: string) => request<TreeNode>(`/vaults/${vaultId}/open`, { method: 'POST' }),
   getTree: (vaultId: string) => request<TreeNode>(`/vaults/${vaultId}/tree`),
   forgetVault: (vaultId: string) => request<void>(`/vaults/${vaultId}`, { method: 'DELETE' }),

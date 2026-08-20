@@ -12,6 +12,8 @@ from app.services.watcher_service import registry as watcher_registry
 
 
 def vault_root(vault: models.Vault) -> Path:
+    if vault.external_path:
+        return Path(vault.external_path).resolve()
     return (settings.VAULTS_ROOT / vault.slug).resolve()
 
 

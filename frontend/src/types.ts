@@ -5,6 +5,8 @@ export interface Vault {
   icon: string
   created_at: string
   last_opened_at: string
+  external_path: string | null
+  is_obsidian_vault: boolean
 }
 
 export interface TreeNode {
