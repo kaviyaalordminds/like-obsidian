@@ -1,9 +1,12 @@
 """The AI Tool Layer (Part 25/26): every capability the agent has, as a
 flat registry of named tools with a JSON schema, a safety class, and a
-handler. Handlers call `knowledge_service` for anything that touches the
-vault and the read-only graph/health/search services for everything else —
-never `vault_service` or the filesystem directly, so this file is the one
-place that decides what the AI is allowed to do at all.
+handler. Every tool that reads or writes a specific, caller-supplied vault
+path goes through `knowledge_service` (writes) or a `security.safe_join`-
+confined lookup (reads keyed by path), never a raw `pathlib` join — so this
+file is the one place that decides what the AI is allowed to do at all.
+`vault_service` is imported only for whole-tree listing helpers
+(`build_tree`) that take no caller-supplied relative path and so have no
+path-traversal surface.
 
 Several spec-listed tool names are deliberate aliases of the same
 operation (e.g. `find_related_notes` / `get_related_notes`,
@@ -20,6 +23,7 @@ from typing import Any, Callable
 from sqlalchemy.orm import Session
 
 from app import models
+from app.security import safe_join
 from app.services import graph_metrics_service, graph_service, health_service, knowledge_service, search_service, vault_service
 from app.services.index_service import IndexService
 
@@ -122,7 +126,7 @@ def _get_note_metadata(ctx: ToolContext, args: dict) -> Any:
     note = ctx.index.get(args["path"])
     if not note:
         return {"error": f"No such note: {args['path']}"}
-    stat = (ctx.root / args["path"]).stat()
+    stat = safe_join(ctx.root, args["path"]).stat()
     return {
         "path": args["path"],
         "title": note.parsed.title,

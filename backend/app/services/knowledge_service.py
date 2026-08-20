@@ -3,12 +3,14 @@ call for anything that touches the vault (Part 24/64/65):
 
     AI Agent -> AI Tool Layer -> Knowledge Service -> Vault Service -> files
 
-The AI tool layer (`services/ai/tools.py`) never imports `vault_service`,
-`index_service`, or `pathlib` directly — every mutation goes through a
+Every mutation in the AI tool layer (`services/ai/tools.py`) goes through a
 function here, which is exactly the same safe path the HTTP routers use
 (index refresh, race-safe link rewriting, activity logging), so an AI
 action and a user's own edit are indistinguishable to the rest of the app
-and leave the same audit trail.
+and leave the same audit trail. The tool layer does import `vault_service`
+directly for read-only, path-argument-free helpers (`build_tree`) and
+`security.safe_join` for the one read keyed by a caller-supplied path
+(`get_note_metadata`) — never a raw, unconfined filesystem join.
 """
 from __future__ import annotations
 
