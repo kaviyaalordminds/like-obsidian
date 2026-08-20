@@ -60,6 +60,9 @@ class Vault(Base):
     ai_actions: Mapped[list["AIAction"]] = relationship(
         back_populates="vault", cascade="all, delete-orphan"
     )
+    obsidian_connection: Mapped["ObsidianConnection"] = relationship(
+        back_populates="vault", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class VaultSettings(Base):
@@ -189,3 +192,24 @@ class AIAction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     vault: Mapped[Vault] = relationship(back_populates="ai_actions")
+
+
+class ObsidianConnection(Base):
+    """Per-vault config for the Obsidian Local REST API connector (Part 56,
+    Mode B) — talks to a *running* Obsidian instance over HTTPS instead of
+    this vault's own folder on disk. `api_key` never round-trips back to the
+    client once set, same as `AIConfig.api_key`."""
+
+    __tablename__ = "obsidian_connections"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vault_id: Mapped[str] = mapped_column(ForeignKey("vaults.id"), unique=True)
+    host: Mapped[str] = mapped_column(String(255), default="127.0.0.1")
+    port: Mapped[int] = mapped_column(default=27124)
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    use_https: Mapped[bool] = mapped_column(Boolean, default=True)
+    verify_ssl: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    vault: Mapped[Vault] = relationship(back_populates="obsidian_connection")

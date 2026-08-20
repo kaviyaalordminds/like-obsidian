@@ -329,3 +329,18 @@ export interface AIContextPreview {
   tags: string[]
   paths: string[]
 }
+
+export interface ObsidianConnectionConfig {
+  configured: boolean
+  host: string
+  port: number
+  use_https: boolean
+  verify_ssl: boolean
+}
+
+export interface ObsidianTestResult {
+  ok: boolean
+  authenticated: boolean
+  service: string
+  error: string | null
+}

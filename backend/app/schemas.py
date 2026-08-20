@@ -304,3 +304,29 @@ class AIActionOut(BaseModel):
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+# --- Obsidian Local REST API connector (Mode B) ---
+
+
+class ObsidianConnectionIn(BaseModel):
+    host: str | None = None
+    port: int | None = None
+    api_key: str | None = None
+    use_https: bool | None = None
+    verify_ssl: bool | None = None
+
+
+class ObsidianConnectionOut(BaseModel):
+    configured: bool
+    host: str
+    port: int
+    use_https: bool
+    verify_ssl: bool
+
+
+class ObsidianTestResult(BaseModel):
+    ok: bool
+    authenticated: bool = False
+    service: str = ""
+    error: str | None = None

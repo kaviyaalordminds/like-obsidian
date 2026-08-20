@@ -18,6 +18,8 @@ import type {
   Note,
   NoteFilterCriteria,
   NoteSuggestions,
+  ObsidianConnectionConfig,
+  ObsidianTestResult,
   OrphanNote,
   PluginInfo,
   RelatedTag,
@@ -271,6 +273,15 @@ export const api = {
   listAIActions: (vaultId: string, limit = 50) => request<AIAction[]>(`/vaults/${vaultId}/ai/actions?limit=${limit}`),
   aiContextPreview: (vaultId: string, context: AIContextSelection) =>
     request<AIContextPreview>(`/vaults/${vaultId}/ai/context/preview`, { method: 'POST', body: JSON.stringify(context) }),
+
+  // Obsidian Local REST API connector (Mode B)
+  getObsidianRestConfig: (vaultId: string) => request<ObsidianConnectionConfig>(`/vaults/${vaultId}/obsidian-rest/config`),
+  setObsidianRestConfig: (
+    vaultId: string,
+    patch: { host?: string; port?: number; api_key?: string; use_https?: boolean; verify_ssl?: boolean },
+  ) => request<ObsidianConnectionConfig>(`/vaults/${vaultId}/obsidian-rest/config`, { method: 'PUT', body: JSON.stringify(patch) }),
+  testObsidianRestConnection: (vaultId: string) =>
+    request<ObsidianTestResult>(`/vaults/${vaultId}/obsidian-rest/test`, { method: 'POST' }),
 }
 
 /** One increment of a streamed agent turn, mirroring the backend's SSE event shapes. */

@@ -19,6 +19,7 @@ from app.routers import (
     health as health_router,
     import_export,
     notes,
+    obsidian_rest,
     plugins,
     search,
     settings as settings_router,
@@ -69,3 +70,4 @@ app.include_router(canvas.router)
 app.include_router(activity.router)
 app.include_router(ai.router)
 app.include_router(events.router)
+app.include_router(obsidian_rest.router)

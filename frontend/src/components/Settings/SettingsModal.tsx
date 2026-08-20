@@ -7,8 +7,9 @@ import { TemplatesTab } from './TemplatesTab'
 import { PluginsTab } from './PluginsTab'
 import { HotkeysTab } from './HotkeysTab'
 import { AITab } from './AITab'
+import { ObsidianTab } from './ObsidianTab'
 
-type Tab = 'appearance' | 'editor' | 'graph' | 'daily-notes' | 'templates' | 'hotkeys' | 'plugins' | 'ai' | 'vault'
+type Tab = 'appearance' | 'editor' | 'graph' | 'daily-notes' | 'templates' | 'hotkeys' | 'plugins' | 'ai' | 'obsidian' | 'vault'
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'appearance', label: 'Appearance' },
@@ -19,6 +20,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'hotkeys', label: 'Hotkeys' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'ai', label: 'AI' },
+  { id: 'obsidian', label: 'Obsidian' },
   { id: 'vault', label: 'Vault' },
 ]
 
@@ -233,6 +235,7 @@ export function SettingsModal() {
             {tab === 'hotkeys' && <HotkeysTab />}
             {tab === 'plugins' && <PluginsTab />}
             {tab === 'ai' && <AITab />}
+            {tab === 'obsidian' && <ObsidianTab />}
 
             {tab === 'vault' && vault && (
               <div className="space-y-3 text-sm">
