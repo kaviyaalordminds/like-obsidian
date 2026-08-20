@@ -57,6 +57,12 @@ class NoteOut(BaseModel):
 
 class NoteWrite(BaseModel):
     content: str
+    # The mtime the client last read for this note (Part 56 conflict
+    # detection). When set and the file on disk has since changed to a
+    # different mtime, the save is rejected with 409 instead of silently
+    # overwriting an edit made elsewhere (another tab, Obsidian itself, a
+    # sync client). Omit it to force an unconditional overwrite.
+    expected_mtime: float | None = None
 
 
 class NoteCreate(BaseModel):

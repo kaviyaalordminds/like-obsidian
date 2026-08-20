@@ -115,7 +115,7 @@ export interface PluginInfo {
   enabled: boolean
 }
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
 
 // --- Graph metrics / clusters / path ---
 

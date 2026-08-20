@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import get_db
 from app.deps import get_vault, vault_root
+from app.security import safe_join
 from app.services import suggestion_service, vault_service
 from app.services.event_bus import bus
 from app.services.index_service import IndexService, get_index
@@ -15,6 +16,11 @@ from app.services.markdown_parser import parse_note
 from app.services.rename_service import apply_link_updates, plan_link_updates
 
 router = APIRouter(prefix="/api/vaults/{vault_id}/notes", tags=["notes"])
+
+# Filesystem mtime precision varies (whole seconds on some platforms/file
+# systems), so an exact float comparison would false-positive on a save
+# that immediately follows the read it's based on.
+_MTIME_EPSILON = 0.001
 
 
 def _log(db: Session, vault: models.Vault, path: str, action: str, detail: str = "") -> None:
@@ -117,6 +123,15 @@ def save_note(
 ):
     root = vault_root(vault)
     index = get_index(root)
+
+    if payload.expected_mtime is not None:
+        target = safe_join(root, path)
+        if target.exists() and abs(target.stat().st_mtime - payload.expected_mtime) > _MTIME_EPSILON:
+            # Someone else — another tab, Obsidian itself, a sync client —
+            # changed this note since the client last read it. Report the
+            # real current version instead of silently overwriting it.
+            raise HTTPException(status_code=409, detail=_note_out(root, path).model_dump())
+
     before = _tags_and_links(index, path)
     vault_service.write_note(root, path, payload.content)
     index.refresh_path(path)

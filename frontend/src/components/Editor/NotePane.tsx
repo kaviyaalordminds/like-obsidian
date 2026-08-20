@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import type { EditorView } from '@uiw/react-codemirror'
-import { Pencil, Columns2, Eye, Loader2, Check, AlertCircle } from 'lucide-react'
+import { Pencil, Columns2, Eye, Loader2, Check, AlertCircle, AlertTriangle } from 'lucide-react'
 import { NoteEditor } from './NoteEditor'
 import { MarkdownPreview } from './MarkdownPreview'
 import { EditorToolbar } from './EditorToolbar'
+import { ConflictDialog } from './ConflictDialog'
 import { useNoteStore } from '@/store/noteStore'
 import { useVaultStore } from '@/store/vaultStore'
 import { useUIStore, type EditorMode } from '@/store/uiStore'
@@ -19,6 +20,7 @@ function SaveStatusBadge({ status }: { status: SaveStatus }) {
   if (status === 'saving') return <span className="flex items-center gap-1 text-xs text-[var(--color-text-faint)]"><Loader2 size={12} className="animate-spin" /> Saving…</span>
   if (status === 'saved') return <span className="flex items-center gap-1 text-xs text-[var(--color-text-faint)]"><Check size={12} /> Saved</span>
   if (status === 'error') return <span className="flex items-center gap-1 text-xs text-[var(--color-danger)]"><AlertCircle size={12} /> Error saving</span>
+  if (status === 'conflict') return <span className="flex items-center gap-1 text-xs text-[var(--color-danger)]"><AlertTriangle size={12} /> Changed elsewhere</span>
   return null
 }
 
@@ -34,6 +36,9 @@ export function NotePane({ path, onOpenNote, onCreateNote }: Props) {
   const loadNote = useNoteStore((s) => s.loadNote)
   const updateContent = useNoteStore((s) => s.updateContent)
   const saveNow = useNoteStore((s) => s.saveNow)
+  const resolveConflictKeepCurrent = useNoteStore((s) => s.resolveConflictKeepCurrent)
+  const resolveConflictUseExternal = useNoteStore((s) => s.resolveConflictUseExternal)
+  const resolveConflictMerge = useNoteStore((s) => s.resolveConflictMerge)
   const mode = useUIStore((s) => s.editorMode)
   const setEditorMode = useUIStore((s) => s.setEditorMode)
   const viewRef = useRef<EditorView | null>(null)
@@ -107,6 +112,16 @@ export function NotePane({ path, onOpenNote, onCreateNote }: Props) {
           </div>
         )}
       </div>
+
+      {entry.status === 'conflict' && entry.conflict && (
+        <ConflictDialog
+          localContent={entry.content}
+          externalContent={entry.conflict.content}
+          onKeepCurrent={() => resolveConflictKeepCurrent(vault.id, path)}
+          onUseExternal={() => resolveConflictUseExternal(path)}
+          onMerge={() => resolveConflictMerge(path)}
+        />
+      )}
     </div>
   )
 }

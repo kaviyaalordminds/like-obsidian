@@ -34,9 +34,14 @@ const BASE = '/api'
 
 class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** The raw `detail` field from the error body — a string for most errors,
+   * but a structured payload for endpoints that need to hand back more than
+   * text (e.g. a 409 conflict carrying the current on-disk note). */
+  detail: unknown
+  constructor(status: number, message: string, detail?: unknown) {
     super(message)
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -46,14 +51,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   })
   if (!res.ok) {
-    let detail = res.statusText
+    let detail: unknown = res.statusText
     try {
       const body = await res.json()
       detail = body.detail ?? detail
     } catch {
       // ignore
     }
-    throw new ApiError(res.status, detail)
+    throw new ApiError(res.status, typeof detail === 'string' ? detail : res.statusText, detail)
   }
   if (res.status === 204) return undefined as T
   const contentType = res.headers.get('content-type') ?? ''
@@ -77,10 +82,10 @@ export const api = {
     request<Note>(`/vaults/${vaultId}/notes/${encodeSegments(path)}`),
   createNote: (vaultId: string, path: string, content = '') =>
     request<Note>(`/vaults/${vaultId}/notes`, { method: 'POST', body: JSON.stringify({ path, content }) }),
-  saveNote: (vaultId: string, path: string, content: string) =>
+  saveNote: (vaultId: string, path: string, content: string, expectedMtime?: number | null) =>
     request<Note>(`/vaults/${vaultId}/notes/${encodeSegments(path)}`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, expected_mtime: expectedMtime ?? undefined }),
     }),
   deleteNote: (vaultId: string, path: string) =>
     request<void>(`/vaults/${vaultId}/notes/${encodeSegments(path)}`, { method: 'DELETE' }),
