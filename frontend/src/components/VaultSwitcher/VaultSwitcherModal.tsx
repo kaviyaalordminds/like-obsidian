@@ -15,6 +15,8 @@ export function VaultSwitcherModal() {
   const connectVault = useVaultStore((s) => s.connectVault)
   const forgetVault = useVaultStore((s) => s.forgetVault)
   const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [connectPath, setConnectPath] = useState('')
   const [connecting, setConnecting] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
@@ -26,11 +28,19 @@ export function VaultSwitcherModal() {
   if (!open) return null
 
   const handleCreate = async () => {
-    if (!newName.trim()) return
-    const vault = await createVault(newName.trim())
-    setNewName('')
-    await openVault(vault)
-    setOpen(false)
+    if (!newName.trim() || creating) return
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const vault = await createVault(newName.trim())
+      setNewName('')
+      await openVault(vault)
+      setOpen(false)
+    } catch (e) {
+      setCreateError(e instanceof ApiError ? e.message : 'Could not create that vault.')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleConnect = async () => {
@@ -104,22 +114,26 @@ export function VaultSwitcherModal() {
           {vaults.length === 0 && <div className="text-xs text-[var(--color-text-faint)] px-3 py-2">No vaults yet.</div>}
         </div>
 
-        <div className="flex items-center gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="New vault name"
-            className="flex-1 px-2.5 py-1.5 rounded-md border bg-transparent text-sm outline-none"
-            style={{ borderColor: 'var(--color-border)' }}
-          />
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm text-white"
-            style={{ background: 'var(--color-accent)' }}
-          >
-            <Plus size={14} /> Create
-          </button>
+        <div className="pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-2">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              placeholder="New vault name"
+              className="flex-1 px-2.5 py-1.5 rounded-md border bg-transparent text-sm outline-none"
+              style={{ borderColor: 'var(--color-border)' }}
+            />
+            <button
+              onClick={handleCreate}
+              disabled={creating || !newName.trim()}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-sm text-white disabled:opacity-40"
+              style={{ background: 'var(--color-accent)' }}
+            >
+              <Plus size={14} /> {creating ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+          {createError && <p className="text-xs text-[var(--color-danger)] mt-1.5">{createError}</p>}
         </div>
 
         <div className="pt-3 mt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
